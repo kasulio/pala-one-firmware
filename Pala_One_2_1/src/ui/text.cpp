@@ -2,6 +2,7 @@
 
 #include "src/hal/display.h"            // u8g2
 #include "src/pure/bookmarks_codec.h"   // kOffsetUnset
+#include "src/pure/stream.h"
 #include "src/storage/page_cache.h"     // on-disk page-offset cache
 #include "src/ui/font.h"                // Font::useBody / bodyLayout / measureBionicLine / layoutForCache
 
@@ -96,4 +97,20 @@ uint32_t resolveBookmarkOffset(const String& path, uint16_t page, uint32_t store
   uint32_t off = pageOffsetForPage(f, path, page);
   f.close();
   return off;
+}
+
+int collectWrappedLines(const String& text, int maxWidthPx, String* out, int cap) {
+  if (!out || cap <= 0)
+    return 0;
+  StringReadStream stream(text);
+  LayoutMetrics m = Font::bodyLayout();
+  m.maxWidth = maxWidthPx;
+  m.maxLines = cap;
+  Font::useBody();
+  int count = 0;
+  paginatePage(stream, 0, m, bodyMeasure, [&](const char* buf, size_t len) {
+    if (count < cap)
+      out[count++] = String(buf, (unsigned)len);
+  });
+  return count;
 }

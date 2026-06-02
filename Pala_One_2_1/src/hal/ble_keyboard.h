@@ -32,6 +32,13 @@ namespace BleKeyboard
     Failed,
   };
 
+  enum class PairingHint : uint8_t
+  {
+    None = 0,
+    TypeOnKeyboard,
+    ConfirmOnKeyboard,
+  };
+
   void beginSession();
   // Tear down BLE on the worker task (non-blocking).
   void requestEndSession();
@@ -49,11 +56,9 @@ namespace BleKeyboard
   void connectCandidate();
 
   LinkState linkState();
-  const char *linkStateLabel();
-  const char *statusSubline();
-
-  // Six-digit BLE pairing code while connecting (empty string if none).
   const char *pairingCode();
+  PairingHint pairingHint();
+  const char *lastAdvertisedName();
 
   bool popEvent(KeyEvent &out);
   bool isSessionActive();

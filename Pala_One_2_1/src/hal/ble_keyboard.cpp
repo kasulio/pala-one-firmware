@@ -1,4 +1,5 @@
 #include "src/hal/ble_keyboard.h"
+#include "src/hal/ble_keyboard_internal.h"
 
 #include <ctype.h>
 
@@ -91,12 +92,6 @@ namespace BleKeyboard
     static QueueHandle_t s_keyQueue = nullptr;
 
     static char s_pairingCode[8] = "";
-    enum class PairingHint : uint8_t
-    {
-      None,
-      TypeOnKeyboard,
-      ConfirmOnKeyboard
-    };
     static PairingHint s_pairingHint = PairingHint::None;
 
     static bool s_authComplete = false;
@@ -164,159 +159,12 @@ namespace BleKeyboard
 
     static KbSecurityCb s_secCb;
 
-    static void enqueue(KeyAction action, char ch = 0)
+    static void enqueueKey(KeyAction action, char ch = 0)
     {
       if (!s_keyQueue)
         return;
       KeyEvent ev = {action, ch};
       xQueueSendFromISR(s_keyQueue, &ev, nullptr);
-    }
-
-    static char hidToAscii(uint8_t key, bool shift)
-    {
-      if (key >= 0x04 && key <= 0x1D)
-      {
-        char base = (char)('a' + (key - 0x04));
-        return shift ? (char)(base - 32) : base;
-      }
-      if (key >= 0x1E && key <= 0x26)
-      {
-        const char *nums = "123456789";
-        char c = nums[key - 0x1E];
-        if (shift)
-        {
-          const char *shifted = "!@#$%^&*(";
-          return shifted[key - 0x1E];
-        }
-        return c;
-      }
-      if (key == 0x27)
-        return shift ? ')' : '0';
-      if (key == 0x2C)
-        return ' ';
-      if (key == 0x2D)
-        return shift ? '_' : '-';
-      if (key == 0x2E)
-        return shift ? '+' : '=';
-      if (key == 0x2F)
-        return shift ? '{' : '[';
-      if (key == 0x30)
-        return shift ? '}' : ']';
-      if (key == 0x31)
-        return shift ? '|' : '\\';
-      if (key == 0x33)
-        return shift ? ':' : ';';
-      if (key == 0x34)
-        return shift ? '"' : '\'';
-      if (key == 0x35)
-        return shift ? '~' : '`';
-      if (key == 0x36)
-        return shift ? '<' : ',';
-      if (key == 0x37)
-        return shift ? '>' : '.';
-      if (key == 0x38)
-        return shift ? '?' : '/';
-      return 0;
-    }
-
-    static uint8_t s_prevKeys[6] = {};
-
-    static bool wasInPrevReport(uint8_t key)
-    {
-      for (int i = 0; i < 6; i++)
-        if (s_prevKeys[i] == key)
-          return true;
-      return false;
-    }
-
-    static void handleBootReport(const uint8_t *data, size_t len, size_t keyStart)
-    {
-      if (len < keyStart + 1)
-        return;
-      uint8_t mods = data[0];
-      bool shift = (mods & 0x22) != 0;
-      size_t keySlots = len - keyStart;
-      if (keySlots > 6)
-        keySlots = 6;
-
-      // Capture new keycodes before processing so we can update prev state.
-      uint8_t curKeys[6] = {};
-      for (size_t i = 0; i < keySlots; i++)
-        curKeys[i] = data[keyStart + i];
-
-      for (size_t i = 0; i < keySlots; i++)
-      {
-        uint8_t key = data[keyStart + i];
-        if (key == 0)
-          continue;
-        // Only fire on key-down transition; skip typematic repeats.
-        if (wasInPrevReport(key))
-          continue;
-        if (key == 0x28)
-        {
-#if DEBUG_BUILD
-          Serial.println("[key] ENTER");
-#endif
-          enqueue(KeyAction::Newline);
-          continue;
-        }
-        if (key == 0x2A)
-        {
-#if DEBUG_BUILD
-          Serial.println("[key] BACKSPACE");
-#endif
-          enqueue(KeyAction::Backspace);
-          continue;
-        }
-        char ch = hidToAscii(key, shift);
-#if DEBUG_BUILD
-        if (ch)
-          Serial.printf("[key] 0x%02X shift=%d -> '%c'\n", key, shift, ch);
-        else
-          Serial.printf("[key] 0x%02X shift=%d -> NO MAP (dropped)\n", key, shift);
-#endif
-        if (ch)
-          enqueue(KeyAction::Char, ch);
-      }
-
-      memcpy(s_prevKeys, curKeys, sizeof(s_prevKeys));
-    }
-
-    static void handleHidReport(const uint8_t *data, size_t len)
-    {
-      if (len < 2)
-        return;
-      // 9-byte: report ID prefix + standard 8-byte boot report.
-      if (len == 9)
-      {
-        handleBootReport(data + 1, 8, 2);
-        return;
-      }
-      // 8-byte: standard boot report [mod][reserved][key×6].
-      if (len == 8)
-      {
-        handleBootReport(data, 8, 2);
-        return;
-      }
-      // 7-byte: boot report without reserved byte [mod][key×6].
-      if (len == 7)
-      {
-        handleBootReport(data, 7, 1);
-        return;
-      }
-      // Fallback: treat byte 0 as modifier, rest as keycodes.
-      handleBootReport(data, len, 1);
-    }
-
-    static void notifyThunk(BLERemoteCharacteristic *, uint8_t *data, size_t len, bool)
-    {
-#if DEBUG_BUILD
-      Serial.printf("[hid] raw len=%u:", (unsigned)len);
-      for (size_t i = 0; i < len; i++)
-        Serial.printf(" %02X", data[i]);
-      Serial.println();
-#endif
-      handleHidReport(data, len);
     }
 
     static BLERemoteService *findHidService(BLEClient *client)
@@ -354,7 +202,7 @@ namespace BleKeyboard
         const BLEUUID &uuid = c->getUUID();
         if (uuid.equals(s_reportChar) || uuid.equals(BLEUUID((uint16_t)0x2A4B)))
         {
-          c->registerForNotify(notifyThunk);
+          c->registerForNotify(Internal::onHidNotify);
           any = true;
         }
       }
@@ -365,7 +213,7 @@ namespace BleKeyboard
           BLERemoteCharacteristic *c = it.second;
           if (c && c->canNotify())
           {
-            c->registerForNotify(notifyThunk);
+            c->registerForNotify(Internal::onHidNotify);
             any = true;
           }
         }
@@ -757,7 +605,7 @@ namespace BleKeyboard
       s_connectStartedMs = millis();
       s_authComplete = false;
       s_awaitingSetup = false;
-      memset(s_prevKeys, 0, sizeof(s_prevKeys));
+      Internal::clearPrevKeys();
       notifyWorker(WorkerCmd::Connect);
     }
 
@@ -985,6 +833,16 @@ namespace BleKeyboard
 
   } // namespace
 
+  namespace Internal
+  {
+
+    void enqueue(KeyAction action, char ch)
+    {
+      enqueueKey(action, ch);
+    }
+
+  } // namespace Internal
+
   void beginSession()
   {
     if (s_session)
@@ -1000,7 +858,7 @@ namespace BleKeyboard
       s_keyQueue = xQueueCreate(kQueueCap, sizeof(KeyEvent));
     else
       xQueueReset(s_keyQueue);
-    memset(s_prevKeys, 0, sizeof(s_prevKeys));
+    Internal::clearPrevKeys();
     s_lastAdvName[0] = '\0';
     s_authComplete = false;
     s_awaitingSetup = false;
@@ -1198,49 +1056,11 @@ namespace BleKeyboard
 
   LinkState linkState() { return s_link; }
 
-  const char *linkStateLabel()
-  {
-    switch (s_link)
-    {
-    case LinkState::Scanning:
-      return hasCandidate() ? D_NOTES_STATUS_SCANNING : D_NOTES_STATUS_SCANNING;
-    case LinkState::Connecting:
-      return s_pairingCode[0] ? D_NOTES_STATUS_PAIRING : D_NOTES_STATUS_CONNECTING;
-    case LinkState::Connected:
-      return D_NOTES_STATUS_CONNECTED;
-    case LinkState::Failed:
-      return D_NOTES_STATUS_FAILED;
-    default:
-      return "Off";
-    }
-  }
-
-  const char *statusSubline()
-  {
-    if (s_link == LinkState::Scanning)
-    {
-      if (hasCandidate())
-        return candidateName();
-      if (s_lastAdvName[0])
-        return s_lastAdvName;
-      return D_NOTES_PAIR_MODE;
-    }
-    if (s_link == LinkState::Connecting)
-    {
-      if (s_pairingCode[0])
-      {
-        if (s_pairingHint == PairingHint::TypeOnKeyboard)
-          return D_NOTES_PIN_ENTER;
-        return D_NOTES_PIN_MATCH;
-      }
-      return candidateName();
-    }
-    if (s_link == LinkState::Failed)
-      return D_NOTES_FAILED_HINT;
-    return "";
-  }
-
   const char *pairingCode() { return s_pairingCode; }
+
+  PairingHint pairingHint() { return s_pairingHint; }
+
+  const char *lastAdvertisedName() { return s_lastAdvName; }
 
   bool popEvent(KeyEvent &out)
   {

@@ -43,4 +43,9 @@ uint32_t pageOffsetForPage(File& f, const String& path, int page);
 // back to `pageOffsetForPage` otherwise. Owns the file handle internally.
 uint32_t resolveBookmarkOffset(const String& path, uint16_t page, uint32_t storedOffset);
 
+// Wrap in-memory UTF-8 text using the same rules as reader pagination (body font).
+// Fills out[0..count-1]. Stops at cap lines or end of text.
+// Caller must Font::useBody() before draw if lines were measured with body face.
+int collectWrappedLines(const String& text, int maxWidthPx, String* out, int cap);
+
 #endif  // PALA_UI_TEXT_H
