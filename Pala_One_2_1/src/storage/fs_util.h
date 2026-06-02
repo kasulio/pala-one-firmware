@@ -11,6 +11,7 @@ size_t fsTotalBytesSafe();
 size_t fsUsedBytesSafe();
 size_t fsFreeBytesSafe();
 void   ensureBooksDir();
+void   ensureNotesDir();
 bool   ensureDirRecursive(const String& path);
 bool   isDirEmpty(const String& path);
 

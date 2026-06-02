@@ -36,6 +36,33 @@
 #define D_MENU_STATISTICS           "Estadísticas"
 #define D_MENU_DEVICE               "Dispositivo"
 #define D_MENU_UPLOAD               "Conectar"
+#define D_MENU_NOTES                "Notas"
+
+// ----------------------------------------------------------------------------
+//  Notes screen (src/ui/screens/notes_screen.cpp)
+// ----------------------------------------------------------------------------
+#define D_NOTES_HEADER              "Notas"
+#define D_NOTES_HDR_START           "BT..."
+#define D_NOTES_HDR_SCAN            "Buscando"
+#define D_NOTES_HDR_CONNECT         "Conectando"
+#define D_NOTES_HDR_PAIR            "Emparejando"
+#define D_NOTES_HDR_OK              "Conectado"
+#define D_NOTES_HDR_FAIL            "Sin teclado"
+#define D_NOTES_BLE_START           "Iniciando Bluetooth..."
+#define D_NOTES_STATUS_SCANNING     "Buscando..."
+#define D_NOTES_PAIR_MODE           "Active modo emparejar"
+#define D_NOTES_ACTION_NEXT         "Pulse 1x: siguiente"
+#define D_NOTES_ACTION_CONNECT      "Pulse 2x: conectar"
+#define D_NOTES_DEVICE_OF           "Dispositivo %d de %d"
+#define D_NOTES_STATUS_CONNECTING   "Conectando..."
+#define D_NOTES_STATUS_PAIRING      "Emparejando"
+#define D_NOTES_STATUS_CONNECTED    "Teclado conectado"
+#define D_NOTES_STATUS_FAILED       "No se encontro teclado"
+#define D_NOTES_FAILED_HINT         "Mantenga boton emparejar en teclado"
+#define D_NOTES_ACTION_SAVE         "Mantenga para guardar"
+#define D_NOTES_ACTION_CANCEL       "Mantenga para cancelar"
+#define D_NOTES_PIN_ENTER           "Escriba PIN en teclado:"
+#define D_NOTES_PIN_MATCH           "Confirme el mismo PIN:"
 #define D_LIBRARY_OPEN_FAILED       "Error al abrir"
 #define D_LIBRARY_TRY_UPLOAD        "Intente subir de nuevo"
 

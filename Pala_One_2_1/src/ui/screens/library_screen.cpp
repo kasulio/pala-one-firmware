@@ -14,6 +14,7 @@
 #include "src/ui/screens/bookmarks/book_select_screen.h"
 #include "src/ui/screens/bookmarks/session.h"
 #include "src/ui/screens/list_screen.h"
+#include "src/ui/screens/notes_screen.h"
 #include "src/ui/screens/reader_screen.h"
 #include "src/ui/screens/statistics_screen.h"
 #include "src/ui/screens/upload_screen.h"
@@ -108,7 +109,7 @@ static bool isSystemEntryType(LibraryEntryType t) {
   return t == LIB_ENTRY_BOOKMARKS || t == LIB_ENTRY_LIST
       || t == LIB_ENTRY_APPS || t == LIB_ENTRY_STATISTICS
       || t == LIB_ENTRY_ABOUT || t == LIB_ENTRY_UPDATE
-      || t == LIB_ENTRY_UPLOAD;
+      || t == LIB_ENTRY_UPLOAD || t == LIB_ENTRY_NOTES;
 }
 
 static int rowIndent(const LibEntry& e) {
@@ -123,14 +124,15 @@ static String entryLabel(const LibEntry& e) {
       String prefix = isExpanded(g_library.folders[e.ref]) ? "- " : "+ ";
       return prefix + folderLeafLabel(String(g_library.folders[e.ref]));
     }
-    case LIB_ENTRY_BOOK:      return bookLeafLabel(String(g_library.books[e.ref].path));
-    case LIB_ENTRY_BOOKMARKS: return D_MENU_BOOKMARKS;
-    case LIB_ENTRY_LIST:      return D_MENU_LIST;
+    case LIB_ENTRY_BOOK:       return bookLeafLabel(String(g_library.books[e.ref].path));
+    case LIB_ENTRY_BOOKMARKS:  return D_MENU_BOOKMARKS;
+    case LIB_ENTRY_LIST:       return D_MENU_LIST;
     case LIB_ENTRY_APPS:       return D_MENU_APPS;
     case LIB_ENTRY_STATISTICS: return D_MENU_STATISTICS;
     case LIB_ENTRY_ABOUT:      return D_MENU_DEVICE;
     case LIB_ENTRY_UPDATE:     return D_MENU_UPDATE;
     case LIB_ENTRY_UPLOAD:     return D_MENU_UPLOAD;
+    case LIB_ENTRY_NOTES:      return D_MENU_NOTES;
   }
   return "";
 }
@@ -159,13 +161,14 @@ void LibraryScreen::draw() {
 
   // Decide which system entries to show. "List" only appears when the
   // todo list has visible items; the rest are always present.
-  LibraryEntryType systemEntries[7];
+  LibraryEntryType systemEntries[8];
   int systemCount = 0;
   systemEntries[systemCount++] = LIB_ENTRY_BOOKMARKS;
   if (listHasVisibleItems()) systemEntries[systemCount++] = LIB_ENTRY_LIST;
   systemEntries[systemCount++] = LIB_ENTRY_APPS;
   systemEntries[systemCount++] = LIB_ENTRY_STATISTICS;
   systemEntries[systemCount++] = LIB_ENTRY_ABOUT;
+  systemEntries[systemCount++] = LIB_ENTRY_NOTES;
   systemEntries[systemCount++] = LIB_ENTRY_UPLOAD;
   systemEntries[systemCount++] = LIB_ENTRY_UPDATE;
 
@@ -263,6 +266,11 @@ void LibraryScreen::onButton(const ButtonEvent& e) {
 
   if (sel.type == LIB_ENTRY_UPLOAD) {
     nextScreen = &g_uploadScreen;
+    return;
+  }
+
+  if (sel.type == LIB_ENTRY_NOTES) {
+    nextScreen = &g_notesScreen;
     return;
   }
 

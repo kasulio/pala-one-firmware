@@ -99,6 +99,7 @@
 #include "src/ui/screens/bookmarks/preview_screen.h"
 #include "src/ui/screens/library_screen.h"
 #include "src/ui/screens/list_screen.h"
+#include "src/ui/screens/notes_screen.h"
 #include "src/ui/screens/reader_screen.h"
 #include "src/ui/screens/statistics_screen.h"
 #include "src/ui/screens/update_screen.h"

@@ -33,6 +33,33 @@
 #define D_MENU_STATISTICS           "Statistics"
 #define D_MENU_DEVICE               "Device"
 #define D_MENU_UPLOAD               "Upload"
+#define D_MENU_NOTES                "Notes"
+
+// ----------------------------------------------------------------------------
+//  Notes screen (src/ui/screens/notes_screen.cpp)
+// ----------------------------------------------------------------------------
+#define D_NOTES_HEADER              "Notes"
+#define D_NOTES_HDR_START           "BT..."
+#define D_NOTES_HDR_SCAN            "Scanning"
+#define D_NOTES_HDR_CONNECT         "Connecting"
+#define D_NOTES_HDR_PAIR            "Pairing"
+#define D_NOTES_HDR_OK              "Connected"
+#define D_NOTES_HDR_FAIL            "No keyboard"
+#define D_NOTES_BLE_START           "Starting Bluetooth..."
+#define D_NOTES_STATUS_SCANNING     "Scanning..."
+#define D_NOTES_PAIR_MODE           "Put keyboard in pairing mode"
+#define D_NOTES_ACTION_NEXT         "Press once: next device"
+#define D_NOTES_ACTION_CONNECT      "Press twice: connect"
+#define D_NOTES_DEVICE_OF           "Device %d of %d"
+#define D_NOTES_STATUS_CONNECTING   "Connecting..."
+#define D_NOTES_STATUS_PAIRING      "Pairing"
+#define D_NOTES_STATUS_CONNECTED    "Keyboard connected"
+#define D_NOTES_STATUS_FAILED       "No keyboard found"
+#define D_NOTES_FAILED_HINT         "Hold pairing button on keyboard"
+#define D_NOTES_ACTION_SAVE         "Hold to save & exit"
+#define D_NOTES_ACTION_CANCEL       "Hold to cancel"
+#define D_NOTES_PIN_ENTER           "Type PIN on keyboard:"
+#define D_NOTES_PIN_MATCH           "Confirm same PIN on keyboard:"
 #define D_LIBRARY_OPEN_FAILED       "Open failed"
 #define D_LIBRARY_TRY_UPLOAD        "Try upload again"
 

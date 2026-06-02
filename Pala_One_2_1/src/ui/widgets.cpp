@@ -55,13 +55,27 @@ void drawCenter(const char* a, const char* b) {
   display.update();
 }
 
-int drawSectionHeader(const char* title) {
+int drawSectionHeader(const char* title, const char* rightStatus) {
   Font::useBold();
   int ascent = u8g2.getFontAscent();
   int yTitle = UI_HEADER_TOP + ascent - 2;
 
   u8g2.setCursor(MARGIN_X, yTitle);
   u8g2.print(title);
+  int titleW = u8g2.getUTF8Width(title);
+
+  if (rightStatus && rightStatus[0] != '\0')
+  {
+    Font::useUiSmall();
+    constexpr int kBatteryReserve = 54;
+    int w = u8g2.getUTF8Width(rightStatus);
+    int x = SCREEN_W - MARGIN_X - kBatteryReserve - 4 - w;
+    int minX = MARGIN_X + titleW + 8;
+    if (x < minX)
+      x = minX;
+    u8g2.setCursor(x, yTitle);
+    u8g2.print(rightStatus);
+  }
 
 #if HAS_BATTERY
   drawBatteryTopRight();
