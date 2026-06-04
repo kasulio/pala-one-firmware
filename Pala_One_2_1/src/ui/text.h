@@ -48,4 +48,13 @@ uint32_t resolveBookmarkOffset(const String& path, uint16_t page, uint32_t store
 // Caller must Font::useBody() before draw if lines were measured with body face.
 int collectWrappedLines(const String& text, int maxWidthPx, String* out, int cap);
 
+// Notes edit: preserve trailing/leading spaces; same wrap rules as reader body font.
+int collectWrappedLinesForEdit(const String& text, int maxWidthPx, String* out, int cap);
+int notesBuildWrapped(const String& text, int maxWidthPx, String* lineOut,
+                      uint32_t* lineStartOut, int cap);
+int notesBuildLineStarts(const String& text, int maxWidthPx, uint32_t* starts, int cap);
+bool notesMapCaret(const String& text, int maxWidthPx, size_t caret,
+                   const uint32_t* starts, int lineCount, int* outLine, int* outColPx);
+size_t notesMoveCaretVertical(const String& text, int maxWidthPx, size_t caret, int deltaLine);
+
 #endif  // PALA_UI_TEXT_H

@@ -29,11 +29,6 @@ void ensureBooksDir() {
   if (!FS.exists("/books")) FS.mkdir("/books");
 }
 
-void ensureNotesDir()
-{
-  if (!FS.exists("/notes")) FS.mkdir("/notes");
-}
-
 bool ensureDirRecursive(const String& path) {
   if (path.length() == 0 || path == "/") return true;
   if (FS.exists(path)) return true;

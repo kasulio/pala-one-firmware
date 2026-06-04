@@ -4,6 +4,7 @@
 #include <ctype.h>
 
 #include <esp_bt.h>
+#include <esp_random.h>
 
 #include <BLEDevice.h>
 #include <BLEScan.h>
@@ -36,6 +37,7 @@ namespace BleKeyboard
     static constexpr uint32_t kScanSeconds = 5;
     static constexpr uint32_t kRescanMs = 8000;
     static constexpr uint32_t kConnectTimeoutMs = 15000;
+    static constexpr uint32_t kBondedSetupFallbackMs = 3000;
     static constexpr int kStrongCandidateScore = 120;
     static constexpr char kPrefsNs[] = "ereader";
     static constexpr char kAddrKey[] = "ble_kb_addr";
@@ -77,10 +79,16 @@ namespace BleKeyboard
       char addr[24];
       char name[40];
       uint8_t addrType = 0;
+      KeyboardLayout layout = KeyboardLayout::Unknown;
     };
+
+    static KeyboardLayout s_activeLayout = KeyboardLayout::Unknown;
+    static bool s_needsLayoutPick = false;
 
     static SavedKb s_savedKb[kMaxSavedKb];
     static int s_savedKbCount = 0;
+    static bool s_savedListLoaded = false;
+    static uint16_t s_deviceListVersion = 0;
 
     static bool hasPickAddress() { return s_pickAddr[0] != '\0'; }
 
@@ -96,6 +104,7 @@ namespace BleKeyboard
 
     static bool s_authComplete = false;
     static bool s_awaitingSetup = false;
+    static bool s_pendingQuickConnect = false;
 
     enum class WorkerCmd : uint8_t
     {
@@ -135,6 +144,13 @@ namespace BleKeyboard
 
     class KbSecurityCb : public BLESecurityCallbacks
     {
+      uint32_t onPassKeyRequest() override
+      {
+        uint32_t passkey = BLESecurity::getPassKey();
+        setPairingCode(passkey, PairingHint::TypeOnKeyboard);
+        return passkey;
+      }
+
       void onPassKeyNotify(uint32_t pass_key) override
       {
         setPairingCode(pass_key, PairingHint::TypeOnKeyboard);
@@ -159,11 +175,20 @@ namespace BleKeyboard
 
     static KbSecurityCb s_secCb;
 
-    static void enqueueKey(KeyAction action, char ch = 0)
+    static void enqueueKey(KeyAction action, const char *utf8 = nullptr,
+                            uint8_t utf8Len = 0)
     {
       if (!s_keyQueue)
         return;
-      KeyEvent ev = {action, ch};
+      KeyEvent ev = {};
+      ev.action = action;
+      if (utf8 && utf8Len > 0)
+      {
+        if (utf8Len > sizeof(ev.utf8))
+          utf8Len = sizeof(ev.utf8);
+        ev.utf8Len = utf8Len;
+        memcpy(ev.utf8, utf8, utf8Len);
+      }
       xQueueSendFromISR(s_keyQueue, &ev, nullptr);
     }
 
@@ -221,6 +246,13 @@ namespace BleKeyboard
       return any;
     }
 
+    static void refreshPairingPasskey()
+    {
+      randomSeed((unsigned)esp_random());
+      BLESecurity sec;
+      sec.setPassKey(false);
+    }
+
     static void ensureBleSecurity()
     {
       static bool configured = false;
@@ -235,6 +267,8 @@ namespace BleKeyboard
       sec.setCapability(ESP_IO_CAP_IO);
       sec.setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
       sec.setRespEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
+      sec.regenPassKeyOnConnect(true);
+      refreshPairingPasskey();
     }
 
     static int findSavedByAddr(const char *addr)
@@ -261,6 +295,8 @@ namespace BleKeyboard
         list += String((unsigned)s_savedKb[i].addrType);
         list += ",";
         list += s_savedKb[i].name;
+        list += ",";
+        list += String((unsigned)s_savedKb[i].layout);
       }
 
       Preferences p;
@@ -282,10 +318,11 @@ namespace BleKeyboard
       int c2 = chunk.indexOf(',', c1 + 1);
       if (c2 < 0)
         return;
+      int c3 = chunk.indexOf(',', c2 + 1);
 
       String addr = chunk.substring(0, c1);
       uint8_t addrType = (uint8_t)chunk.substring(c1 + 1, c2).toInt();
-      String name = chunk.substring(c2 + 1);
+      String name = (c3 < 0) ? chunk.substring(c2 + 1) : chunk.substring(c2 + 1, c3);
       if (addr.length() == 0)
         return;
 
@@ -294,7 +331,42 @@ namespace BleKeyboard
       out.addrType = addrType;
       strncpy(out.name, name.c_str(), sizeof(out.name) - 1);
       out.name[sizeof(out.name) - 1] = '\0';
+      if (c3 >= 0)
+      {
+        const unsigned lv = (unsigned)chunk.substring(c3 + 1).toInt();
+        if (lv <= (unsigned)KeyboardLayout::FR)
+          out.layout = (KeyboardLayout)lv;
+      }
     }
+
+    static void applyLayoutFromSaved(const char *addr)
+    {
+      s_activeLayout = KeyboardLayout::Unknown;
+      s_needsLayoutPick = false;
+      const int idx = findSavedByAddr(addr);
+      if (idx < 0)
+      {
+        s_needsLayoutPick = true;
+        return;
+      }
+      if (s_savedKb[idx].layout == KeyboardLayout::Unknown)
+        s_needsLayoutPick = true;
+      else
+        s_activeLayout = s_savedKb[idx].layout;
+    }
+
+    static void updateSavedLayout(const char *addr, KeyboardLayout layout)
+    {
+      const int idx = findSavedByAddr(addr);
+      if (idx < 0)
+        return;
+      s_savedKb[idx].layout = layout;
+      persistSavedList();
+    }
+
+    static void invalidateSavedList() { s_savedListLoaded = false; }
+
+    static void bumpDeviceListVersion() { s_deviceListVersion++; }
 
     static void loadSavedList()
     {
@@ -302,7 +374,10 @@ namespace BleKeyboard
 
       Preferences p;
       if (!p.begin(kPrefsNs, true))
+      {
+        s_savedListLoaded = true;
         return;
+      }
 
       if (p.isKey(kAddrKey))
       {
@@ -322,13 +397,17 @@ namespace BleKeyboard
         p.remove(kAddrKey);
         p.remove(kAddrTypeKey);
         persistSavedList();
+        s_savedListLoaded = true;
         return;
       }
 
       String list = p.getString(kSavedListKey, "");
       p.end();
       if (list.length() == 0)
+      {
+        s_savedListLoaded = true;
         return;
+      }
 
       int start = 0;
       while (start < (int)list.length() && s_savedKbCount < kMaxSavedKb)
@@ -342,11 +421,18 @@ namespace BleKeyboard
           s_savedKb[s_savedKbCount++] = entry;
         start = sep + 1;
       }
+      s_savedListLoaded = true;
+    }
+
+    static void ensureSavedListLoaded()
+    {
+      if (!s_savedListLoaded)
+        loadSavedList();
     }
 
     static void rememberPeer(const BLEAddress &addr, uint8_t addrType, const char *name)
     {
-      loadSavedList();
+      ensureSavedListLoaded();
 
       SavedKb entry = {};
       strncpy(entry.addr, addr.toString().c_str(), sizeof(entry.addr) - 1);
@@ -359,6 +445,9 @@ namespace BleKeyboard
       }
 
       int existing = findSavedByAddr(entry.addr);
+      if (existing >= 0)
+        entry.layout = s_savedKb[existing].layout;
+
       if (existing > 0)
       {
         SavedKb keep = entry;
@@ -386,6 +475,9 @@ namespace BleKeyboard
     static void clearSavedList()
     {
       s_savedKbCount = 0;
+      invalidateSavedList();
+      s_activeLayout = KeyboardLayout::Unknown;
+      s_needsLayoutPick = false;
       Preferences p;
       if (!p.begin(kPrefsNs, false))
         return;
@@ -406,6 +498,58 @@ namespace BleKeyboard
         return;
       for (int i = 0; i < count; i++)
         ble_store_util_delete_peer(&peers[i]);
+    }
+
+    static void requestConnect();
+
+    static bool isBondedAddress(const char *addrStr)
+    {
+      if (!addrStr || !addrStr[0])
+        return false;
+
+      ble_addr_t peers[CONFIG_BT_NIMBLE_MAX_BONDS];
+      int count = 0;
+      if (ble_store_util_bonded_peers(peers, &count, CONFIG_BT_NIMBLE_MAX_BONDS) != 0 || count == 0)
+        return false;
+
+      BLEAddress want(addrStr);
+      const uint8_t *wantBytes = want.getNative();
+      if (!wantBytes)
+        return false;
+
+      for (int i = 0; i < count; i++)
+      {
+        if (memcmp(peers[i].val, wantBytes, 6) == 0)
+          return true;
+      }
+      return false;
+    }
+
+    static void restorePickFromSaved()
+    {
+      if (s_savedKbCount == 0 || s_savedKb[0].addr[0] == '\0')
+        return;
+      strncpy(s_pickAddr, s_savedKb[0].addr, sizeof(s_pickAddr) - 1);
+      s_pickAddr[sizeof(s_pickAddr) - 1] = '\0';
+      strncpy(s_pickName, s_savedKb[0].name, sizeof(s_pickName) - 1);
+      s_pickName[sizeof(s_pickName) - 1] = '\0';
+      s_pickAddrType = s_savedKb[0].addrType;
+    }
+
+    static void maybeTriggerQuickConnect(const char *seenAddr)
+    {
+      if (!s_pendingQuickConnect || !s_pickAddr[0] || !seenAddr)
+        return;
+      if (strcmp(seenAddr, s_pickAddr) != 0)
+        return;
+
+      s_pendingQuickConnect = false;
+      if (s_scanning && BLEDevice::getInitialized())
+      {
+        BLEDevice::getScan()->stop();
+        s_scanning = false;
+      }
+      requestConnect();
     }
 
     static bool nameContains(const char *hay, const char *needle)
@@ -494,6 +638,7 @@ namespace BleKeyboard
       s_pickAddr[0] = '\0';
       s_pickName[0] = '\0';
       s_pickAddrType = 0;
+      bumpDeviceListVersion();
     }
 
     static void upsertDevice(BLEAdvertisedDevice &dev, int score)
@@ -564,6 +709,7 @@ namespace BleKeyboard
         s_selectedIndex = 0;
 
       syncPickFromSelected();
+      bumpDeviceListVersion();
     }
 
     class ClientCb : public BLEClientCallbacks
@@ -601,6 +747,7 @@ namespace BleKeyboard
         return;
       if (s_link == LinkState::Connecting || s_link == LinkState::Connected)
         return;
+      s_pendingQuickConnect = false;
       s_link = LinkState::Connecting;
       s_connectStartedMs = millis();
       s_authComplete = false;
@@ -610,7 +757,9 @@ namespace BleKeyboard
     }
 
     static void startScan(bool clearList);
+    static void stopActiveScan();
     static void tryFinishPendingSetup();
+    static void tryBondedSetupFallback();
 
     static void runFinishSetup();
 
@@ -628,6 +777,8 @@ namespace BleKeyboard
       }
 
       rememberPeer(addr, s_pickAddrType, s_pickName[0] ? s_pickName : nullptr);
+      loadSavedList();
+      applyLayoutFromSaved(addr.toString().c_str());
       s_link = LinkState::Connected;
       s_connectStartedMs = 0;
       return true;
@@ -664,9 +815,14 @@ namespace BleKeyboard
         s_client = BLEDevice::createClient();
       s_client->setClientCallbacks(&s_clientCb);
 
+      ensureBleSecurity();
+      if (!isBondedAddress(s_pickAddr))
+        refreshPairingPasskey();
+
 #if DEBUG_BUILD
-      Serial.printf("[ble-kb] connecting %s (%s) addrType=%u\n", s_pickAddr,
-                    s_pickName[0] ? s_pickName : "?", (unsigned)s_pickAddrType);
+      Serial.printf("[ble-kb] connecting %s (%s) addrType=%u bonded=%d\n", s_pickAddr,
+                    s_pickName[0] ? s_pickName : "?", (unsigned)s_pickAddrType,
+                    (int)isBondedAddress(s_pickAddr));
 #endif
 
       if (!s_client->connect(BLEAddress(s_pickAddr), s_pickAddrType))
@@ -679,8 +835,9 @@ namespace BleKeyboard
         s_link = LinkState::Failed;
         s_connectStartedMs = 0;
         s_awaitingSetup = false;
-        if (s_deviceCount == 0)
-          startScan(true);
+        s_pendingQuickConnect = false;
+        restorePickFromSaved();
+        startScan(false);
         return false;
       }
 
@@ -701,7 +858,13 @@ namespace BleKeyboard
       BLEDevice::init("Pala-One");
       ensureBleSecurity();
       loadSavedList();
+      s_activeLayout = KeyboardLayout::Unknown;
+      s_needsLayoutPick = false;
+      s_pendingQuickConnect = false;
+
       startScan(true);
+      restorePickFromSaved();
+      s_pendingQuickConnect = false;
     }
 
     static void workerEndSession()
@@ -756,6 +919,22 @@ namespace BleKeyboard
       notifyWorker(WorkerCmd::FinishSetup);
     }
 
+    static void tryBondedSetupFallback()
+    {
+      if (!s_awaitingSetup || s_authComplete || s_connectStartedMs == 0)
+        return;
+      if (!s_client || !s_client->isConnected())
+        return;
+      if (!isBondedAddress(s_pickAddr))
+        return;
+      if ((uint32_t)(millis() - s_connectStartedMs) < kBondedSetupFallbackMs)
+        return;
+
+      s_authComplete = true;
+      clearPairingCode();
+      notifyWorker(WorkerCmd::FinishSetup);
+    }
+
     class ScanCb : public BLEAdvertisedDeviceCallbacks
     {
       void onResult(BLEAdvertisedDevice dev) override
@@ -770,11 +949,21 @@ namespace BleKeyboard
         }
 
         upsertDevice(dev, keyboardAdvertScore(dev));
+        maybeTriggerQuickConnect(dev.getAddress().toString().c_str());
         stopScanIfStrongCandidate();
       }
     };
 
     static ScanCb s_scanCb;
+
+    static void stopActiveScan()
+    {
+      if (s_scanning && BLEDevice::getInitialized())
+      {
+        BLEDevice::getScan()->stop();
+        s_scanning = false;
+      }
+    }
 
     static void startScan(bool clearList)
     {
@@ -836,9 +1025,19 @@ namespace BleKeyboard
   namespace Internal
   {
 
-    void enqueue(KeyAction action, char ch)
+    void enqueue(KeyAction action, const char *utf8, uint8_t utf8Len)
     {
-      enqueueKey(action, ch);
+      if (!acceptingHidKeys())
+        return;
+      enqueueKey(action, utf8, utf8Len);
+    }
+
+    KeyboardLayout activeLayoutForHid() { return s_activeLayout; }
+
+    bool acceptingHidKeys()
+    {
+      return s_link == LinkState::Connected && !s_needsLayoutPick &&
+             s_activeLayout != KeyboardLayout::Unknown;
     }
 
   } // namespace Internal
@@ -862,8 +1061,12 @@ namespace BleKeyboard
     s_lastAdvName[0] = '\0';
     s_authComplete = false;
     s_awaitingSetup = false;
+    s_pendingQuickConnect = false;
     clearPairingCode();
+    s_activeLayout = KeyboardLayout::Unknown;
+    s_needsLayoutPick = false;
     s_link = LinkState::Scanning;
+    invalidateSavedList();
 
     notifyWorker(WorkerCmd::InitSession);
   }
@@ -882,6 +1085,7 @@ namespace BleKeyboard
     s_runConnect = false;
     s_authComplete = false;
     s_awaitingSetup = false;
+    s_pendingQuickConnect = false;
     clearPairingCode();
     if (BLEDevice::getInitialized())
       BLEDevice::getScan()->stop();
@@ -923,6 +1127,7 @@ namespace BleKeyboard
     s_runConnect = false;
     s_awaitingSetup = false;
     s_authComplete = false;
+    s_pendingQuickConnect = false;
     s_connectStartedMs = 0;
     clearPairingCode();
 
@@ -935,7 +1140,8 @@ namespace BleKeyboard
       s_scanning = false;
     }
 
-    s_link = hasScannedCandidate() ? LinkState::Scanning : LinkState::Failed;
+    restorePickFromSaved();
+    s_link = LinkState::Scanning;
     s_lastScanMs = 0;
     if (s_session)
       startScan(false);
@@ -948,6 +1154,7 @@ namespace BleKeyboard
     clearSavedList();
     removeAllBonds();
     s_lastScanMs = 0;
+    bumpDeviceListVersion();
     if (s_session)
     {
       s_lastAdvName[0] = '\0';
@@ -988,6 +1195,79 @@ namespace BleKeyboard
     s_runConnect = true;
   }
 
+  int savedKeyboardCount()
+  {
+    ensureSavedListLoaded();
+    return s_savedKbCount;
+  }
+
+  const char *savedKeyboardLabel(int index)
+  {
+    ensureSavedListLoaded();
+    if (index < 0 || index >= s_savedKbCount)
+      return "";
+    const SavedKb &e = s_savedKb[index];
+    return e.name[0] ? e.name : e.addr;
+  }
+
+  void pickSavedKeyboard(int index)
+  {
+    ensureSavedListLoaded();
+    if (index < 0 || index >= s_savedKbCount)
+      return;
+    const SavedKb &e = s_savedKb[index];
+    strncpy(s_pickAddr, e.addr, sizeof(s_pickAddr) - 1);
+    s_pickAddr[sizeof(s_pickAddr) - 1] = '\0';
+    strncpy(s_pickName, e.name, sizeof(s_pickName) - 1);
+    s_pickName[sizeof(s_pickName) - 1] = '\0';
+    s_pickAddrType = e.addrType;
+    s_pendingQuickConnect = isBondedAddress(s_pickAddr);
+  }
+
+  static int extraScannedDeviceIndex(int extraIndex)
+  {
+    int seen = 0;
+    for (int i = 0; i < s_deviceCount; i++)
+    {
+      if (findSavedByAddr(s_devices[i].addr) >= 0)
+        continue;
+      if (seen == extraIndex)
+        return i;
+      seen++;
+    }
+    return -1;
+  }
+
+  int extraScannedCount()
+  {
+    int n = 0;
+    for (int i = 0; i < s_deviceCount; i++)
+    {
+      if (findSavedByAddr(s_devices[i].addr) < 0)
+        n++;
+    }
+    return n;
+  }
+
+  const char *extraScannedLabel(int index)
+  {
+    const int devIdx = extraScannedDeviceIndex(index);
+    if (devIdx < 0)
+      return "";
+    const KbDevice &d = s_devices[devIdx];
+    return d.name[0] ? d.name : d.addr;
+  }
+
+  void pickExtraScanned(int index)
+  {
+    const int devIdx = extraScannedDeviceIndex(index);
+    if (devIdx < 0)
+      return;
+    s_selectedIndex = devIdx;
+    syncPickFromSelected();
+    s_pendingQuickConnect = false;
+  }
+
   void loop()
   {
     if (!s_session)
@@ -1014,12 +1294,15 @@ namespace BleKeyboard
 
     if (s_link == LinkState::Connecting && s_connectStartedMs != 0)
     {
+      tryBondedSetupFallback();
       tryFinishPendingSetup();
       if (s_link == LinkState::Connected)
         return;
 
       uint32_t limit = kConnectTimeoutMs;
-      if (s_pairingCode[0] != '\0' || s_awaitingSetup)
+      if (s_pairingCode[0] != '\0')
+        limit = 45000;
+      else if (s_awaitingSetup && !isBondedAddress(s_pickAddr))
         limit = 45000;
       if ((uint32_t)(millis() - s_connectStartedMs) > limit)
       {
@@ -1027,9 +1310,11 @@ namespace BleKeyboard
         Serial.println("[ble-kb] timeout");
 #endif
         s_awaitingSetup = false;
+        s_pendingQuickConnect = false;
         if (s_client && s_client->isConnected())
           s_client->disconnect();
         s_connectStartedMs = 0;
+        restorePickFromSaved();
         startScan(false);
       }
       return;
@@ -1041,7 +1326,13 @@ namespace BleKeyboard
       if (!BLEDevice::getScan()->isScanning())
       {
         s_scanning = false;
-        if (s_link == LinkState::Scanning && !hasScannedCandidate())
+        if (s_pendingQuickConnect && hasPickAddress())
+        {
+          s_pendingQuickConnect = false;
+          requestConnect();
+          return;
+        }
+        if (s_link == LinkState::Scanning && !hasScannedCandidate() && !hasPickAddress())
           s_link = LinkState::Failed;
       }
       return;
@@ -1053,6 +1344,10 @@ namespace BleKeyboard
         startScan(false);
     }
   }
+
+  int deviceListVersion() { return (int)s_deviceListVersion; }
+
+  bool isScanInProgress() { return s_session && s_scanning; }
 
   LinkState linkState() { return s_link; }
 
@@ -1070,5 +1365,19 @@ namespace BleKeyboard
   }
 
   bool isSessionActive() { return s_session; }
+
+  bool needsLayoutPick() { return s_needsLayoutPick; }
+
+  void setKeyboardLayout(KeyboardLayout layout)
+  {
+    if (layout == KeyboardLayout::Unknown)
+      return;
+    s_activeLayout = layout;
+    s_needsLayoutPick = false;
+    if (s_pickAddr[0])
+      updateSavedLayout(s_pickAddr, layout);
+  }
+
+  KeyboardLayout activeLayout() { return s_activeLayout; }
 
 } // namespace BleKeyboard

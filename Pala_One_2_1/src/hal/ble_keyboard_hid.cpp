@@ -1,4 +1,5 @@
 #include "src/hal/ble_keyboard_internal.h"
+#include "src/hal/ble_keyboard_layout.h"
 
 #include <BLEDevice.h>
 
@@ -8,53 +9,6 @@ namespace BleKeyboard
 {
 namespace
 {
-
-static char hidToAscii(uint8_t key, bool shift)
-{
-  if (key >= 0x04 && key <= 0x1D)
-  {
-    char base = (char)('a' + (key - 0x04));
-    return shift ? (char)(base - 32) : base;
-  }
-  if (key >= 0x1E && key <= 0x26)
-  {
-    const char *nums = "123456789";
-    char c = nums[key - 0x1E];
-    if (shift)
-    {
-      const char *shifted = "!@#$%^&*(";
-      return shifted[key - 0x1E];
-    }
-    return c;
-  }
-  if (key == 0x27)
-    return shift ? ')' : '0';
-  if (key == 0x2C)
-    return ' ';
-  if (key == 0x2D)
-    return shift ? '_' : '-';
-  if (key == 0x2E)
-    return shift ? '+' : '=';
-  if (key == 0x2F)
-    return shift ? '{' : '[';
-  if (key == 0x30)
-    return shift ? '}' : ']';
-  if (key == 0x31)
-    return shift ? '|' : '\\';
-  if (key == 0x33)
-    return shift ? ':' : ';';
-  if (key == 0x34)
-    return shift ? '"' : '\'';
-  if (key == 0x35)
-    return shift ? '~' : '`';
-  if (key == 0x36)
-    return shift ? '<' : ',';
-  if (key == 0x37)
-    return shift ? '>' : '.';
-  if (key == 0x38)
-    return shift ? '?' : '/';
-  return 0;
-}
 
 static uint8_t s_prevKeys[6] = {};
 
@@ -103,15 +57,42 @@ static void handleBootReport(const uint8_t *data, size_t len, size_t keyStart)
       Internal::enqueue(KeyAction::Backspace);
       continue;
     }
-    char ch = hidToAscii(key, shift);
+    if (key == 0x50)
+    {
+      Internal::enqueue(KeyAction::Left);
+      continue;
+    }
+    if (key == 0x4F)
+    {
+      Internal::enqueue(KeyAction::Right);
+      continue;
+    }
+    if (key == 0x52)
+    {
+      Internal::enqueue(KeyAction::Up);
+      continue;
+    }
+    if (key == 0x51)
+    {
+      Internal::enqueue(KeyAction::Down);
+      continue;
+    }
+    char utf8[4] = {};
+    const size_t n = hidUsageToUtf8(key, mods, Internal::activeLayoutForHid(),
+                                    utf8, sizeof(utf8));
 #if DEBUG_BUILD
-    if (ch)
-      Serial.printf("[key] 0x%02X shift=%d -> '%c'\n", key, shift, ch);
+    if (n)
+    {
+      Serial.printf("[key] 0x%02X shift=%d -> ", key, shift);
+      for (size_t i = 0; i < n; i++)
+        Serial.printf("%02X ", (uint8_t)utf8[i]);
+      Serial.println();
+    }
     else
       Serial.printf("[key] 0x%02X shift=%d -> NO MAP (dropped)\n", key, shift);
 #endif
-    if (ch)
-      Internal::enqueue(KeyAction::Char, ch);
+    if (n)
+      Internal::enqueue(KeyAction::Char, utf8, (uint8_t)n);
   }
 
   memcpy(s_prevKeys, curKeys, sizeof(s_prevKeys));

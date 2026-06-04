@@ -13,6 +13,8 @@ struct LayoutMetrics {
   int lineH = 0;
   int maxWidth = 0;
   int maxLines = 1;
+  bool trimTrailingSpaces = true;
+  bool trimLeadingSpaces = true;
 };
 
 // Measure the rendered width (in pixels) of a UTF-8 string under the layout's
@@ -20,11 +22,11 @@ struct LayoutMetrics {
 // the measurement function is consistent with the metrics they pass in.
 using MeasureFn = std::function<int(const char*)>;
 
-// Called once per emitted line, in order. `buf` is NUL-terminated and
-// trailing-spaces-trimmed; `len` is its byte length (excluding NUL). The
-// buffer is owned by the paginator and only valid for the duration of the
-// call — copy if you need to keep it.
-using LineCallback = std::function<void(const char* buf, size_t len)>;
+// Called once per emitted line, in order. `buf` is NUL-terminated; `len` is its
+// byte length (excluding NUL). `srcStart` is the byte offset in the source
+// stream where this line begins. Trailing/leading space trimming is controlled
+// by `metrics.trimTrailingSpaces` / `metrics.trimLeadingSpaces`.
+using LineCallback = std::function<void(const char* buf, size_t len, uint32_t srcStart)>;
 
 // Pure pagination engine. Reads bytes from `in` starting at `startPos` and
 // emits at most `metrics.maxLines` lines via `onLine`. Returns the absolute

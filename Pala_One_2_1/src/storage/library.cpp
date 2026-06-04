@@ -3,6 +3,7 @@
 #include "src/pure/paths.h"
 #include "src/state.h"                   // FS macro
 #include "src/storage/fs_util.h"         // ensureBooksDir
+#include "src/storage/notes_paths.h"
 
 // The library catalog. Populated by `loadBooks()` from on-disk `/books/**`.
 // Navigation state (cursor, folder expansion, derived entry list) lives on
@@ -70,7 +71,9 @@ static void scanBooksRecursive(const String& absDir, const String& relDir) {
       strncpy(b.folder, relDir.c_str(), MAX_FOLDER_PATH);
       b.folder[MAX_FOLDER_PATH] = '\0';
 
-      String pretty = prettyRelativeLabel(relFile);
+      String pretty = NotesPaths::isNotesFolder(relDir.c_str())
+                          ? bookLeafLabel(absPath)
+                          : prettyRelativeLabel(relFile);
       strncpy(b.name, pretty.c_str(), 79);
       b.name[79] = '\0';
       b.size = f.size();
@@ -89,6 +92,7 @@ void loadBooks() {
   g_library.folderCount = 0;
 
   ensureBooksDir();
+  NotesPaths::ensureDirAndMigrate();
   scanBooksRecursive("/books", "");
   sortFolders();
   sortBooks();

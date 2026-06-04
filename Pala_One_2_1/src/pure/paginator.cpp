@@ -39,15 +39,16 @@ uint32_t paginatePage(IReadStream& in,
     }
   };
 
-  auto emit = [&](const char* buf, size_t len) {
+  auto emit = [&](const char* buf, size_t len, uint32_t srcStart) {
     linesUsed++;
-    if (onLine) onLine(buf, len);
+    if (onLine) onLine(buf, len, srcStart);
   };
 
   auto flushLine = [&]() {
-    trimTrailing(line, lineLen);
+    if (m.trimTrailingSpaces)
+      trimTrailing(line, lineLen);
     line[lineLen] = 0;
-    emit(line, lineLen);
+    emit(line, lineLen, lineStartPos);
     lineLen = 0;
   };
 
@@ -89,7 +90,7 @@ uint32_t paginatePage(IReadStream& in,
 
       char saved = token[fitLen];
       token[fitLen] = 0;
-      emit(token, fitLen);
+      emit(token, fitLen, tokenStartPos);
       token[fitLen] = saved;
 
       if (linesUsed >= m.maxLines)
@@ -109,7 +110,8 @@ uint32_t paginatePage(IReadStream& in,
     if (tokLen == 0) return 0;
 
     if (lineLen == 0) {
-      trimLeading(token, tokLen);
+      if (m.trimLeadingSpaces)
+        trimLeading(token, tokLen);
       if (tokLen == 0) return 0;
       token[tokLen] = 0;
       if (measure(token) > m.maxWidth) {
@@ -122,7 +124,8 @@ uint32_t paginatePage(IReadStream& in,
       return 0;
     }
 
-    trimLeading(token, tokLen);
+    if (m.trimLeadingSpaces)
+      trimLeading(token, tokLen);
     if (tokLen == 0) return 0;
 
     memcpy(scratch, line, lineLen);

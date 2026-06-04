@@ -26,7 +26,7 @@ std::vector<String> linesOf(const String& text, const LayoutMetrics& metrics, ui
   StringReadStream in(text);
   std::vector<String> lines;
   uint32_t next = paginatePage(in, 0, metrics, byteWidth,
-                               [&](const char* buf, size_t /*len*/) {
+                               [&](const char* buf, size_t /*len*/, uint32_t /*srcStart*/) {
                                  lines.push_back(String(buf));
                                });
   if (outNext) *outNext = next;

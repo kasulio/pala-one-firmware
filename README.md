@@ -1,6 +1,7 @@
-<img width="1892" height="1053" alt="palaOne" src="https://github.com/user-attachments/assets/0fdef5ba-eabd-4b71-9a0c-4c1dc78a4bee" />
+
 
 # pala-one-firmware
+
 Pala One — A tiny E-Ink reader project by Paul Lagier
 
 The goal of the project was to create a simple, distraction-free reading device that feels minimal, portable and easy to build while still looking and behaving more like a real product than a typical DIY electronics project.
@@ -11,8 +12,8 @@ The goal of the project was to create a simple, distraction-free reading device 
 
 The easiest way to flash a board is via the web installer. Plug your Heltec Wireless Paper into a desktop computer running Chrome, Edge, or Opera, then open the installer page and pick a channel:
 
-- **Stable** ([`/stable/`](https://paullagier.github.io/pala-one-firmware/stable/)) — latest tagged release (`vX.Y.Z`). Use this unless you have a reason not to.
-- **Development** ([`/dev/`](https://paullagier.github.io/pala-one-firmware/dev/)) — latest build from `dev`; new features, may break.
+- **Stable** (`[/stable/](https://paullagier.github.io/pala-one-firmware/stable/)`) — latest tagged release (`vX.Y.Z`). Use this unless you have a reason not to.
+- **Development** (`[/dev/](https://paullagier.github.io/pala-one-firmware/dev/)`) — latest build from `dev`; new features, may break.
 
 Each channel page lists both display revisions (V1.1 / V1.2) and both languages (English / Spanish-LA) — four install buttons total. Pick the one that matches your board + language and click **Install**. The installer keeps existing reading progress, bookmarks, and uploaded books across re-flashes.
 
@@ -20,6 +21,7 @@ Each channel page lists both display revisions (V1.1 / V1.2) and both languages 
 
 If you improve the firmware, add features or fix bugs, feel free to open a pull request.
 Please clearly mention:
+
 - which board version(s) you tested on (V1.1, V1.2, or both)
 - what was changed
 - how it was tested
@@ -27,6 +29,7 @@ Please clearly mention:
 ## Board Versions
 
 There are currently two supported Heltec Wireless Paper versions:
+
 - `Heltec V1.1`
 - `Heltec V1.2`
 
@@ -79,12 +82,12 @@ Once the device has Wi-Fi credentials stored (see [Wi-Fi provisioning](#wi-fi-pr
 1. Navigate to **Firmware Update** at the bottom of the library menu.
 2. The device connects to your home network automatically.
 3. Select a channel with **1×** press:
-   - `[x] Stable` — latest tagged release. 
-   - `[ ] Dev` — latest development build; may contain new features or instabilities.
+  - `[x] Stable` — latest tagged release. 
+  - `[ ] Dev` — latest development build; may contain new features or instabilities.
 4. Navigate to **[ Check for update ]** with **1×** and confirm with **2×**.
-   The device probes the update server, fetches the manifest, and compares the remote version against the installed one.
+  The device probes the update server, fetches the manifest, and compares the remote version against the installed one.
 5. If an update is available, **[ Install update ]** appears. Navigate to it with **1×** and confirm with **2×**.
-   The binary streams directly into the idle OTA partition (~5–30 s depending on your network).
+  The binary streams directly into the idle OTA partition (~5–30 s depending on your network).
 6. When flashing is complete, press **2×** to reboot into the new firmware.
 
 ### Requirements
@@ -95,10 +98,12 @@ Once the device has Wi-Fi credentials stored (see [Wi-Fi provisioning](#wi-fi-pr
 
 ### Channels
 
-| Channel | URL | Version format | Stability |
-|---------|-----|----------------|-----------|
-| `stable` | `/stable/` | `vX.Y.Z` | Tagged releases only |
-| `dev` | `/dev/` | `dev-<sha>` | Latest build from `dev` |
+
+| Channel  | URL        | Version format | Stability               |
+| -------- | ---------- | -------------- | ----------------------- |
+| `stable` | `/stable/` | `vX.Y.Z`       | Tagged releases only    |
+| `dev`    | `/dev/`    | `dev-<sha>`    | Latest build from `dev` |
+
 
 The selected channel is saved to NVS and survives reboots. It can be changed at any time from the Firmware Update screen.
 
@@ -110,7 +115,7 @@ All requests are made over HTTPS. The TLS connection is validated against the ID
 
 ## Wi-Fi provisioning (Improv)
 
-Besides the SoftAP captive portal, the firmware supports **Improv Serial** Wi-Fi provisioning ([improv-wifi.com](https://www.improv-wifi.com)) over the USB-CDC port, using the [`jnthas/Improv-WiFi-Library`](https://github.com/jnthas/Improv-WiFi-Library). When the board is plugged into a computer, a browser can hand it Wi-Fi credentials directly — the [web installer](https://paullagier.github.io/pala-one-firmware/) does this right after flashing and then redirects to `connected.html`. Provisioning runs only while a USB host is actually present, so there's no battery cost otherwise.
+Besides the SoftAP captive portal, the firmware supports **Improv Serial** Wi-Fi provisioning ([improv-wifi.com](https://www.improv-wifi.com)) over the USB-CDC port, using the `[jnthas/Improv-WiFi-Library](https://github.com/jnthas/Improv-WiFi-Library)`. When the board is plugged into a computer, a browser can hand it Wi-Fi credentials directly — the [web installer](https://paullagier.github.io/pala-one-firmware/) does this right after flashing and then redirects to `connected.html`. Provisioning runs only while a USB host is actually present, so there's no battery cost otherwise.
 
 Saved credentials let the device join your network in **Station mode** the next time it enters the web UI / upload mode; if none are saved (or the join fails) it falls back to the open SoftAP at `192.168.4.1`. See `Pala_One_2_1/src/hal/wifi_provisioning.{h,cpp}` and `src/hal/wifi.cpp`.
 
@@ -122,10 +127,10 @@ The same sources build under either toolchain.
 
 1. Install the **esp32 by Espressif Systems** board package (Boards Manager) and select the **Heltec WiFi LoRa 32 V3** board.
 2. Install these libraries via Library Manager (or by URL):
-   - [`heltec-eink-modules`](https://github.com/todd-herbert/heltec-eink-modules) (todd-herbert fork)
-   - **Adafruit GFX Library** (Adafruit)
-   - **U8g2_for_Adafruit_GFX** (olikraus)
-   - [`Improv-WiFi-Library`](https://github.com/jnthas/Improv-WiFi-Library) (jnthas) — serial Wi-Fi provisioning; PlatformIO installs it automatically, Arduino IDE users add it by URL
+  - `[heltec-eink-modules](https://github.com/todd-herbert/heltec-eink-modules)` (todd-herbert fork)
+  - **Adafruit GFX Library** (Adafruit)
+  - **U8g2_for_Adafruit_GFX** (olikraus)
+  - `[Improv-WiFi-Library](https://github.com/jnthas/Improv-WiFi-Library)` (jnthas) — serial Wi-Fi provisioning; PlatformIO installs it automatically, Arduino IDE users add it by URL
 3. Open `Pala_One_2_1/Pala_One_2_1.ino`. Uncomment exactly one of `BOARD_V1_1` / `BOARD_V1_2` at the top.
 4. Tools → Partition Scheme → **Custom** (the sketch ships its own `partitions.csv`).
 5. Verify / Upload.
@@ -134,16 +139,16 @@ The same sources build under either toolchain.
 
 1. Install [PlatformIO Core](https://platformio.org/install/cli) (CLI) or the PlatformIO IDE extension for VS Code.
 2. From the repo root:
-   ```
+  ```
    pio run -e wireless-paper-v1_2-en -t upload    # V1.2 panel, English
    pio run -e wireless-paper-v1_2-es -t upload    # V1.2 panel, Spanish-LA
    pio run -e wireless-paper-v1_1-en -t upload    # V1.1 panel, English
    pio run -e wireless-paper-v1_1-es -t upload    # V1.1 panel, Spanish-LA
-   ```
+  ```
 3. Serial monitor:
-   ```
+  ```
    pio device monitor
-   ```
+  ```
 
 Both envs share libraries and partition table via `platformio.ini`. The PIO build also runs `scripts/build_info.py` to inject:
 
@@ -154,13 +159,15 @@ Arduino IDE / host-test builds skip the script and fall back to `"dev"` and `"un
 
 ### Installer site (channels & CI)
 
-The [web installer](https://paullagier.github.io/pala-one-firmware/) is published to the `gh-pages` branch by [`.github/workflows/deploy-installer.yml`](.github/workflows/deploy-installer.yml). Two channels live side-by-side and never overwrite each other:
+The [web installer](https://paullagier.github.io/pala-one-firmware/) is published to the `gh-pages` branch by `[.github/workflows/deploy-installer.yml](.github/workflows/deploy-installer.yml)`. Two channels live side-by-side and never overwrite each other:
 
-| Trigger                       | Channel  | URL path     | `DEBUG_BUILD` | Manifest version |
-|-------------------------------|----------|--------------|---------------|------------------|
-| push to `dev`                 | `dev`    | `/dev/`      | `1` (git hash visible on device) | `dev-<sha>` |
-| tag `v*`                      | `stable` | `/stable/`   | `0` (clean UI) | `vX.Y.Z` |
-| `workflow_dispatch`           | choose   | matches      | depends on channel | `dev-<sha>` / `manual-<sha>` |
+
+| Trigger             | Channel  | URL path   | `DEBUG_BUILD`                    | Manifest version             |
+| ------------------- | -------- | ---------- | -------------------------------- | ---------------------------- |
+| push to `dev`       | `dev`    | `/dev/`    | `1` (git hash visible on device) | `dev-<sha>`                  |
+| tag `v*`            | `stable` | `/stable/` | `0` (clean UI)                   | `vX.Y.Z`                     |
+| `workflow_dispatch` | choose   | matches    | depends on channel               | `dev-<sha>` / `manual-<sha>` |
+
 
 Merges to `main` do **not** auto-publish. Tagging is the explicit release event, so `/stable/` never carries an arbitrary mid-release snapshot and the install dialog always shows a clean version name. To cut a release: merge to `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
 
@@ -173,22 +180,22 @@ Source HTML/manifests live in `install/` on the normal branches. The `gh-pages` 
 To iterate on the installer page (HTML, Improv Serial provisioning flow, manifest tweaks) without CI:
 
 1. Build all four leaf envs at least once so the firmware bins exist:
-   ```
+  ```
    pio run -e wireless-paper-v1_1-en
    pio run -e wireless-paper-v1_1-es
    pio run -e wireless-paper-v1_2-en
    pio run -e wireless-paper-v1_2-es
-   ```
+  ```
 2. Assemble the bundle. Two layouts are supported:
-   ```
+  ```
    python scripts/assemble_site.py                       # flat layout in site/
    python scripts/assemble_site.py --channel dev         # site/index.html + site/dev/
-   ```
+  ```
 3. Serve it. Web Serial works on `localhost` without HTTPS:
-   ```
+  ```
    python -m http.server 8000 --directory site
-   ```
-4. Open <http://localhost:8000> in Chrome, Edge, or Opera. With `--channel`, the landing page is served; without, the installer is served directly.
+  ```
+4. Open [http://localhost:8000](http://localhost:8000) in Chrome, Edge, or Opera. With `--channel`, the landing page is served; without, the installer is served directly.
 
 Optional flags: `--version <string>` to label the manifest, `--out <dir>` to write somewhere other than `site/`. The channel-aware layout produced locally is bit-identical to what the workflow uploads to `gh-pages`.
 
@@ -227,7 +234,7 @@ This is to stay compatible with Arduino IDE. The IDE recursively compiles files 
 
 ## Host-side tests
 
-Pure modules and KV-backed storage have host-side unit tests under [`test/`](test/). They build with CMake and run on your laptop — no board required.
+Pure modules and KV-backed storage have host-side unit tests under `[test/](test/)`. They build with CMake and run on your laptop — no board required.
 
 See [test/README.md](test/README.md) for prerequisites (CMake + a C++17 compiler) and per-platform setup / run instructions for Windows, Linux, and macOS.
 
@@ -240,6 +247,7 @@ See [examples/GETTING_STARTED.md](examples/GETTING_STARTED.md) for the full app-
 ### Building an app
 
 You need:
+
 - The `xtensa-esp32s3-elf-gcc` cross-compiler, which ships with the Arduino ESP32 board package. On Linux it is found under `~/.arduino15/packages/esp32/tools/esp-x32/<version>/bin/`; the `Makefile` locates it automatically.
 - `python3` (for the post-build step that patches the entry point offset into the binary).
 
@@ -267,47 +275,58 @@ Apps communicate with the firmware through the `PalaAPI` function pointer table 
 
 #### Display
 
-| Function | Description |
-|---|---|
-| `clearScreen()` | Clear the display buffer and prepare a new frame |
-| `drawHeader(title)` | Draw the standard section header bar |
-| `drawTextAt(x, y, text, bold)` | Draw text at a pixel position |
-| `drawCenteredLarge(text)` | Draw text centred on screen in a large font |
-| `refreshDisplay()` | Push the frame buffer to the e-ink panel |
+
+| Function                       | Description                                      |
+| ------------------------------ | ------------------------------------------------ |
+| `clearScreen()`                | Clear the display buffer and prepare a new frame |
+| `drawHeader(title)`            | Draw the standard section header bar             |
+| `drawTextAt(x, y, text, bold)` | Draw text at a pixel position                    |
+| `drawCenteredLarge(text)`      | Draw text centred on screen in a large font      |
+| `refreshDisplay()`             | Push the frame buffer to the e-ink panel         |
+
 
 #### Input
 
-| Function | Description |
-|---|---|
-| `waitForEvent()` | Block until a button gesture; returns `PALA_CLICK` / `PALA_DOUBLE` / `PALA_TRIPLE` / `PALA_LONG` |
-| `pollEvent()` | Non-blocking variant; returns 0 if no event is ready |
-| `buttonPressed()` | Returns 1 if the button is currently held, 0 otherwise |
-| `pendingPresses()` | Count of individual short press-release events since last call; bypasses multi-click grouping |
+
+| Function           | Description                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------ |
+| `waitForEvent()`   | Block until a button gesture; returns `PALA_CLICK` / `PALA_DOUBLE` / `PALA_TRIPLE` / `PALA_LONG` |
+| `pollEvent()`      | Non-blocking variant; returns 0 if no event is ready                                             |
+| `buttonPressed()`  | Returns 1 if the button is currently held, 0 otherwise                                           |
+| `pendingPresses()` | Count of individual short press-release events since last call; bypasses multi-click grouping    |
+
 
 #### Timing
 
-| Function | Description |
-|---|---|
-| `millisNow()` | Current uptime in milliseconds |
-| `delayMs(ms)` | Yield for `ms` milliseconds |
+
+| Function       | Description                                                                      |
+| -------------- | -------------------------------------------------------------------------------- |
+| `millisNow()`  | Current uptime in milliseconds                                                   |
+| `delayMs(ms)`  | Yield for `ms` milliseconds                                                      |
 | `rtcSeconds()` | Monotonic seconds counter that survives deep sleep; use for cross-session timing |
+
 
 #### Storage
 
-| Function | Description |
-|---|---|
-| `storageRead(key, buf, maxlen)` | Read from `/apps/{key}.dat`; returns bytes read, -1 on error |
-| `storageWrite(key, buf, len)` | Write to `/apps/{key}.dat`; returns bytes written, -1 on error |
+
+| Function                        | Description                                                    |
+| ------------------------------- | -------------------------------------------------------------- |
+| `storageRead(key, buf, maxlen)` | Read from `/apps/{key}.dat`; returns bytes read, -1 on error   |
+| `storageWrite(key, buf, len)`   | Write to `/apps/{key}.dat`; returns bytes written, -1 on error |
+
 
 #### Utilities
 
-| Function | Description |
-|---|---|
+
+| Function                            | Description         |
+| ----------------------------------- | ------------------- |
 | `snprintf_wrap(buf, len, fmt, ...)` | Standard `snprintf` |
+
 
 Return from `app_main` to exit back to the Apps menu. Apps decide their own exit gesture — the firmware does not impose one.
 
 **Constraints:**
+
 - Apps must be compiled `-fPIC -mlongcalls` (position-independent).
 - Apps must not use static mutable variables — the loader does not patch `.data` relocations.
 - Maximum binary size: 48 KB.
@@ -338,6 +357,7 @@ Return from `app_main` to exit back to the Apps menu. Apps decide their own exit
 ## Hardware
 
 Pala One is based on:
+
 - Heltec Wireless Paper
 - 3D printed housing
 - LiPo battery
@@ -347,6 +367,7 @@ Pala One is based on:
 This repository contains the firmware source code for the project.
 
 Additional files such as:
+
 - STL files
 - STEP files
 - assembly guides
@@ -355,7 +376,7 @@ Additional files such as:
 
 are available separately via Ko-fi:
 
-https://ko-fi.com/s/e14ed892ea
+[https://ko-fi.com/s/e14ed892ea](https://ko-fi.com/s/e14ed892ea)
 
 ## Community & Modifications
 
@@ -367,6 +388,7 @@ If you build your own version or improve the project, feel free to share it with
 The firmware in this repository is provided for personal and educational use.
 
 Please do not:
+
 - reupload paid project files
 - redistribute complete download packages
 - resell the project files

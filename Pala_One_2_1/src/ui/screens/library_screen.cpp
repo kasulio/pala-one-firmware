@@ -14,7 +14,7 @@
 #include "src/ui/screens/bookmarks/book_select_screen.h"
 #include "src/ui/screens/bookmarks/session.h"
 #include "src/ui/screens/list_screen.h"
-#include "src/ui/screens/notes_screen.h"
+#include "src/ui/screens/notes_picker_screen.h"
 #include "src/ui/screens/reader_screen.h"
 #include "src/ui/screens/statistics_screen.h"
 #include "src/ui/screens/upload_screen.h"
@@ -167,8 +167,8 @@ void LibraryScreen::draw() {
   if (listHasVisibleItems()) systemEntries[systemCount++] = LIB_ENTRY_LIST;
   systemEntries[systemCount++] = LIB_ENTRY_APPS;
   systemEntries[systemCount++] = LIB_ENTRY_STATISTICS;
-  systemEntries[systemCount++] = LIB_ENTRY_ABOUT;
   systemEntries[systemCount++] = LIB_ENTRY_NOTES;
+  systemEntries[systemCount++] = LIB_ENTRY_ABOUT;
   systemEntries[systemCount++] = LIB_ENTRY_UPLOAD;
   systemEntries[systemCount++] = LIB_ENTRY_UPDATE;
 
@@ -270,7 +270,7 @@ void LibraryScreen::onButton(const ButtonEvent& e) {
   }
 
   if (sel.type == LIB_ENTRY_NOTES) {
-    nextScreen = &g_notesScreen;
+    nextScreen = &g_notesPickerScreen;
     return;
   }
 

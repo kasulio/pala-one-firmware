@@ -1,9 +1,9 @@
-#ifndef PALA_UI_SCREENS_NOTES_SCREEN_H
-#define PALA_UI_SCREENS_NOTES_SCREEN_H
+#ifndef PALA_UI_SCREENS_NOTES_EDIT_SCREEN_H
+#define PALA_UI_SCREENS_NOTES_EDIT_SCREEN_H
 
 #include "src/ui/screen.h"
 
-class NotesScreen : public Screen
+class NotesEditScreen : public Screen
 {
 public:
   void onEnter() override;
@@ -14,6 +14,6 @@ public:
   bool allowSleep() const override { return false; }
 };
 
-extern NotesScreen g_notesScreen;
+extern NotesEditScreen g_notesEditScreen;
 
-#endif // PALA_UI_SCREENS_NOTES_SCREEN_H
+#endif

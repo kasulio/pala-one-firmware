@@ -15,12 +15,17 @@ namespace BleKeyboard
     Char,
     Backspace,
     Newline,
+    Left,
+    Right,
+    Up,
+    Down,
   };
 
   struct KeyEvent
   {
     KeyAction action = KeyAction::None;
-    char ch = 0;
+    uint8_t utf8Len = 0;
+    char utf8[4] = {};
   };
 
   enum class LinkState : uint8_t
@@ -39,6 +44,15 @@ namespace BleKeyboard
     ConfirmOnKeyboard,
   };
 
+  enum class KeyboardLayout : uint8_t
+  {
+    Unknown = 0,
+    US,
+    UK,
+    DE,
+    FR,
+  };
+
   void beginSession();
   // Tear down BLE on the worker task (non-blocking).
   void requestEndSession();
@@ -55,6 +69,17 @@ namespace BleKeyboard
   void cycleCandidate();
   void connectCandidate();
 
+  int savedKeyboardCount();
+  const char *savedKeyboardLabel(int index);
+  void pickSavedKeyboard(int index);
+
+  int extraScannedCount();
+  const char *extraScannedLabel(int index);
+  void pickExtraScanned(int index);
+
+  int deviceListVersion();
+  bool isScanInProgress();
+
   LinkState linkState();
   const char *pairingCode();
   PairingHint pairingHint();
@@ -62,6 +87,10 @@ namespace BleKeyboard
 
   bool popEvent(KeyEvent &out);
   bool isSessionActive();
+
+  bool needsLayoutPick();
+  void setKeyboardLayout(KeyboardLayout layout);
+  KeyboardLayout activeLayout();
 
 } // namespace BleKeyboard
 

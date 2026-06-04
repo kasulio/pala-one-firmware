@@ -7,12 +7,15 @@
 namespace NotesDocument
 {
 
-constexpr const char *kDefaultPath = "/notes/poc.txt";
 constexpr size_t kMaxChars = 6000;
+constexpr size_t kMaxEditBytes = 6000;
 
+void open(const char *path);
 void load();
 bool save();
+const char *path();
 const String &text();
+size_t caret();
 void applyKey(const BleKeyboard::KeyEvent &ev);
 
 } // namespace NotesDocument

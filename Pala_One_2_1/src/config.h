@@ -60,7 +60,7 @@ static const int MAX_BOOKS = 80;
 static const int MAX_FOLDERS = 32;
 static const int MAX_FOLDER_PATH = 63;  // chars, excluding null
 static const int MAX_PAGES = 10000;
-static const int MAX_LIBRARY_ENTRIES = (MAX_BOOKS * 2) + (MAX_FOLDERS * 2) + 9;
+static const int MAX_LIBRARY_ENTRIES = (MAX_BOOKS * 2) + (MAX_FOLDERS * 2) + 10;
 static const int MAX_LIST_ITEMS = 16;
 static const int MAX_LIST_TEXT = 64;
 

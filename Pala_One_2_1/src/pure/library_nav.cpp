@@ -2,6 +2,10 @@
 
 #include "paths.h"   // folderParent
 
+static bool isHiddenNotesFolder(const String& folderRel) {
+  return folderRel == "notes";
+}
+
 static void addBookEntry(int bookIdx, int depth,
                          LibEntry* out, int& count, int cap) {
   if (count >= cap) return;
@@ -14,6 +18,7 @@ static void addFolderTree(const Catalog& cat, const bool* folderExpanded,
   for (int i = 0; i < cat.folderCount && count < cap; i++) {
     String folderRel = String(cat.folders[i]);
     if (folderParent(folderRel) != parent) continue;
+    if (isHiddenNotesFolder(folderRel)) continue;
 
     if (count >= cap) return;
     out[count++] = { LIB_ENTRY_FOLDER, i, depth };
@@ -21,7 +26,7 @@ static void addFolderTree(const Catalog& cat, const bool* folderExpanded,
     if (!folderExpanded[i]) continue;
 
     for (int b = 0; b < cat.bookCount && count < cap; b++) {
-      if (String(cat.books[b].folder) == folderRel) {
+      if (String(cat.books[b].folder) == folderRel && !isHiddenNotesFolder(folderRel)) {
         addBookEntry(b, depth + 1, out, count, cap);
       }
     }
