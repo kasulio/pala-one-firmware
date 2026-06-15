@@ -152,7 +152,13 @@ void enter() {
   esp_wifi_stop();
   btStop();
 
+  // prepareToSleep() sleeps the SX1262 LoRa radio via software SPI and holds
+  // its CS pin high through deep sleep. Only defined for Wireless Paper by the
+  // heltec-eink-modules library; Vision Master E213 uses the same hardware but
+  // the library doesn't expose this function for that platform yet.
+#ifdef WIRELESS_PAPER
   Platform::prepareToSleep();
+#endif
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
   // INPUT_PULLUP is in the digital IO domain, which powers down in deep sleep.
   // Route BTN to the RTC IO mux and hold the RTC-domain pull-up so the pin

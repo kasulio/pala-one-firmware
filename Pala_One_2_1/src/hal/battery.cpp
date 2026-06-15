@@ -54,7 +54,7 @@ static inline float clampf(float x, float lo, float hi)
 static uint32_t readAdcMilliVoltsStable()
 {
   pinMode(BAT_ADC_CTRL, OUTPUT);
-  digitalWrite(BAT_ADC_CTRL, LOW);
+  digitalWrite(BAT_ADC_CTRL, BAT_ADC_CTRL_ACTIVE);
   delay(12);
 
   (void)analogReadMilliVolts(BAT_ADC_IN);
@@ -71,6 +71,7 @@ static uint32_t readAdcMilliVoltsStable()
     delay(2);
   }
 
+  digitalWrite(BAT_ADC_CTRL, BAT_ADC_CTRL_IDLE);
   pinMode(BAT_ADC_CTRL, INPUT);
   qsort(vals, N, sizeof(vals[0]), cmpUint16);
 
@@ -83,7 +84,7 @@ static uint32_t readAdcMilliVoltsStable()
 static float readBatteryVoltageRaw()
 {
   uint32_t mv = readAdcMilliVoltsStable();
-  float v = ((float)mv / 1000.0f) * 2.0f;
+  float v = ((float)mv / 1000.0f) * BAT_VOLTAGE_DIVIDER;
   v *= s_battery.calibrationFactor;
   return v;
 }

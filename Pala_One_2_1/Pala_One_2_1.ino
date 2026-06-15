@@ -24,8 +24,11 @@
 // ============================================================================
 
 // ── Board selection: uncomment the line that matches your hardware ──────────
+// Wireless Paper:
 // #define BOARD_V1_1
 // #define BOARD_V1_2
+// Vision Master E213:
+// #define BOARD_VISION_MASTER_E213_V1_1
 // ────────────────────────────────────────────────────────────────────────────
 
 // ── Language selection: uncomment exactly one (Arduino IDE) ─────────────────
@@ -64,10 +67,17 @@
   #ifndef DISPLAY_V1_2
     #define DISPLAY_V1_2
   #endif
+#elif defined(BOARD_VISION_MASTER_E213_V1_1)
+  #ifndef Vision_Master_E213
+    #define Vision_Master_E213
+  #endif
+  #ifndef VISION_MASTER_E213_V1_1
+    #define VISION_MASTER_E213_V1_1
+  #endif
 #endif
 
-#if !defined(DISPLAY_V1_1) && !defined(DISPLAY_V1_2)
-  #error "Board not selected. Arduino IDE: uncomment BOARD_V1_1 or BOARD_V1_2 in Pala_One_2_1.ino. PlatformIO: build with -e wireless-paper-v1_1 or -e wireless-paper-v1_2."
+#if !defined(DISPLAY_V1_1) && !defined(DISPLAY_V1_2) && !defined(VISION_MASTER_E213_V1_1)
+  #error "Board not selected. Arduino IDE: uncomment BOARD_V1_1, BOARD_V1_2, or BOARD_VISION_MASTER_E213_V1_1 in Pala_One_2_1.ino. PlatformIO: build with -e wireless-paper-v1_1, -e wireless-paper-v1_2, or -e vision-master-e213-v1_1."
 #endif
 
 #include <Arduino.h>
@@ -170,7 +180,6 @@ void setup() {
 
 #if HAS_BATTERY
   adcSetupOnce();
-  pinMode(BAT_ADC_CTRL, INPUT);
   updateBatteryCached(true);
 #endif
 

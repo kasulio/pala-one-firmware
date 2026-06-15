@@ -122,8 +122,32 @@ static const bool ENABLE_DEEP_SLEEP = true;
 #define BTN 0
 #define HAS_BATTERY 1
 #if HAS_BATTERY
-  #define BAT_ADC_CTRL 19
-  #define BAT_ADC_IN   20
+  // Wireless Paper: GPIO19 is an explicit ADC enable (active LOW); battery
+  // sense on GPIO20 (ADC2). Voltage divider: ~1:1 (×2.0).
+  // Vision Master E213: no separate ADC enable — Vext (GPIO18, managed by the
+  // display library) gates the peripheral rail; battery sense on GPIO7 (ADC1).
+  #if defined(WIRELESS_PAPER)
+    // GPIO19 gates the battery divider, active LOW.
+    #define BAT_ADC_CTRL          19
+    #define BAT_ADC_CTRL_ACTIVE   LOW
+    #define BAT_ADC_CTRL_IDLE     HIGH
+    #define BAT_ADC_IN            20
+    #define BAT_VOLTAGE_DIVIDER   2.0f
+  #elif defined(Vision_Master_E213)
+    // GPIO46 gates the battery divider, active HIGH.
+    #define BAT_ADC_CTRL          46
+    #define BAT_ADC_CTRL_ACTIVE   HIGH
+    #define BAT_ADC_CTRL_IDLE     LOW
+    #define BAT_ADC_IN            7
+    #define BAT_VOLTAGE_DIVIDER   4.9f
+  #else
+    // No dedicated ctrl pin; ADC divider is always connected.
+    #define BAT_ADC_CTRL          -1
+    #define BAT_ADC_CTRL_ACTIVE   HIGH
+    #define BAT_ADC_CTRL_IDLE     LOW
+    #define BAT_ADC_IN            20
+    #define BAT_VOLTAGE_DIVIDER   2.0f
+  #endif
 #endif
 
 // NOTE: `#define FS LittleFS` lives in state.h AFTER all system headers, so it
