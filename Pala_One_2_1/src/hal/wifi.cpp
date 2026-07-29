@@ -71,10 +71,13 @@ void wifiStaAbort() {
 WifiSession wifiBeginAccessPoint() {
   setCpuFrequencyMhz(240);
 
+  Serial.printf("[DEBUG-up1] softAP begin heap=%u\n", ESP.getFreeHeap());
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(AP_SSID, AP_PASS);
+  bool ok = WiFi.softAP(AP_SSID, AP_PASS);
   s_wifiActive = true;
   IPAddress ip = WiFi.softAPIP();
+  Serial.printf("[DEBUG-up1] softAP ok=%d ip=%s heap=%u\n",
+                (int)ok, ip.toString().c_str(), ESP.getFreeHeap());
 
   WifiSession s;
   s.mode       = WifiMode::AccessPoint;

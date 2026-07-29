@@ -7,25 +7,29 @@
 //    1. Arduino IDE requires a .ino with the same name as the sketch folder.
 //    2. It provides a single place for Arduino IDE users to pick the board
 //       revision. PlatformIO users pick the env in platformio.ini instead
-//       and can leave the BOARD_V1_x defines below alone.
+//       and can leave the BOARD_* defines below alone.
 //
 //  Build options:
 //
 //    - PlatformIO (recommended):
-//        pio run -e wireless-paper-v1_2 -t upload   # V1.2 panel
-//        pio run -e wireless-paper-v1_1 -t upload   # V1.1 panel
+//        pio run -e wireless-paper-v1_2-en -t upload   # Heltec V1.2
+//        pio run -e wireless-paper-v1_1-en -t upload   # Heltec V1.1
+//        pio run -e seeed-ee05-en -t upload            # Seeed EE05 + 2.13"
 //
 //    - Arduino IDE 2:
-//        1. Install the Heltec ESP32 board package (heltec_wifi_lora_32_V3).
+//        1. Install the board package for your hardware.
 //        2. Install libraries: heltec-eink-modules (todd-herbert fork),
 //           Adafruit GFX, U8g2_for_Adafruit_GFX.
-//        3. Uncomment exactly one of BOARD_V1_1 / BOARD_V1_2 below.
+//        3. Uncomment exactly one BOARD_* define below.
 //        4. Compile and upload.
 // ============================================================================
 
 // ── Board selection: uncomment the line that matches your hardware ──────────
+// Heltec Wireless Paper:
 // #define BOARD_V1_1
 // #define BOARD_V1_2
+// Seeed XIAO ePaper Display Board EE05 (122×250 mono panel):
+// #define BOARD_SEEED_EE05
 // ────────────────────────────────────────────────────────────────────────────
 
 // ── Language selection: uncomment exactly one (Arduino IDE) ─────────────────
@@ -46,10 +50,10 @@
 // #define WEB_THEME_DARK
 // ────────────────────────────────────────────────────────────────────────────
 
-// When built with PlatformIO, WIRELESS_PAPER + DISPLAY_V1_x come from
-// build_flags and the BOARD_V1_x macros above stay commented out. When
-// built with Arduino IDE, the macros above drive the same defines so the
-// rest of the firmware sees one consistent set of feature flags.
+// When built with PlatformIO, board flags come from build_flags and the
+// BOARD_* macros above stay commented out. When built with Arduino IDE, the
+// macros above drive the same defines so the rest of the firmware sees one
+// consistent set of feature flags.
 #if defined(BOARD_V1_1)
   #ifndef WIRELESS_PAPER
     #define WIRELESS_PAPER
@@ -64,10 +68,14 @@
   #ifndef DISPLAY_V1_2
     #define DISPLAY_V1_2
   #endif
+#elif defined(BOARD_SEEED_EE05)
+  #ifndef SEEED_EE05
+    #define SEEED_EE05
+  #endif
 #endif
 
-#if !defined(DISPLAY_V1_1) && !defined(DISPLAY_V1_2)
-  #error "Board not selected. Arduino IDE: uncomment BOARD_V1_1 or BOARD_V1_2 in Pala_One_2_1.ino. PlatformIO: build with -e wireless-paper-v1_1 or -e wireless-paper-v1_2."
+#if !defined(DISPLAY_V1_1) && !defined(DISPLAY_V1_2) && !defined(SEEED_EE05)
+  #error "Board not selected. Arduino IDE: uncomment BOARD_V1_1, BOARD_V1_2, or BOARD_SEEED_EE05 in Pala_One_2_1.ino. PlatformIO: build with -e wireless-paper-v1_1, -e wireless-paper-v1_2, or -e seeed-ee05."
 #endif
 
 #include <Arduino.h>
@@ -176,7 +184,6 @@ void setup() {
 
 #if HAS_BATTERY
   adcSetupOnce();
-  pinMode(BAT_ADC_CTRL, INPUT);
   updateBatteryCached(true);
 #endif
 

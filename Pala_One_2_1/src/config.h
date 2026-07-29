@@ -102,11 +102,32 @@ static const bool SHOW_PROGRESS_BAR = true;
 static const bool SHOW_PAGE_NUMBER = true;
 static const bool ENABLE_DEEP_SLEEP = true;
 
-#define BTN 0
+// Single-button input. Heltec Wireless Paper: PRG on GPIO0.
+// Seeed EE05: KEY1 on GPIO2 (D1). KEY2/KEY3 unused for now.
+#if defined(SEEED_EE05)
+  #define BTN 2
+#else
+  #define BTN 0
+#endif
+
 #define HAS_BATTERY 1
 #if HAS_BATTERY
-  #define BAT_ADC_CTRL 19
-  #define BAT_ADC_IN   20
+  // Wireless Paper: GPIO19 ADC enable (active LOW); sense GPIO20; ~1:1 divider.
+  // Seeed EE05: D5/GPIO6 enable (active HIGH); sense A0/GPIO1; ~1:1 divider
+  //   (Seeed EE04/EE05 cookbook).
+  #if defined(SEEED_EE05)
+    #define BAT_ADC_CTRL          6
+    #define BAT_ADC_CTRL_ACTIVE   1
+    #define BAT_ADC_CTRL_IDLE     0
+    #define BAT_ADC_IN            1
+    #define BAT_VOLTAGE_DIVIDER   2.0f
+  #else
+    #define BAT_ADC_CTRL          19
+    #define BAT_ADC_CTRL_ACTIVE   0
+    #define BAT_ADC_CTRL_IDLE     1
+    #define BAT_ADC_IN            20
+    #define BAT_VOLTAGE_DIVIDER   2.0f
+  #endif
 #endif
 
 // NOTE: `#define FS LittleFS` lives in state.h AFTER all system headers, so it

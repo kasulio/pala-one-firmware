@@ -15,10 +15,10 @@
 #include "src/web/upload.h"       // resetBookUpload() / resetSleepUpload()
 #include "src/ui/reader_actions.h"
 
-// How long to wait for an STA association before falling back to AP. Long
-// enough for a typical 2.4 GHz home network (~1-3s); short enough that an
-// unreachable network doesn't leave the user staring at "Connecting…".
-static constexpr uint32_t kStaTimeoutMs = 5000;
+// How long to wait for an STA association (+DHCP) before falling back to AP.
+// Matches UpdateScreen: cold Wi-Fi + EE05 post-refresh power recover often
+// needs >5s; unreachable nets still fail via WL_NO_SSID_AVAIL sooner.
+static constexpr uint32_t kStaTimeoutMs = 15000;
 
 // ---- Drawing --------------------------------------------------------------
 static void drawConnecting(const String& ssid) {
@@ -114,6 +114,18 @@ void UploadScreen::onEnter() {
   beginSession();
 }
 
+// Paint a one-line splash before touching the radio. SoftAP/STA + a full
+// e-ink refresh on EE05 spike current hard enough to hang BUSY or brownout-
+// reboot — panel then never leaves the library screen ("upload won't open").
+static void drawUploadStarting() {
+  prepareMenuFrame();
+  int y = drawSectionHeader(D_UPLOAD_HEADER);
+  Font::useBold();
+  u8g2.setCursor(MARGIN_X, y);
+  u8g2.print(D_UPLOAD_CONNECTING);
+  display.update();
+}
+
 void UploadScreen::beginSession() {
   resetBookUpload();
   resetSleepUpload();
@@ -124,14 +136,28 @@ void UploadScreen::beginSession() {
   // WifiProvisioning::loop() can't race the WiFi.begin() we're about to fire.
   WifiProvisioning::notifyUploadSession(true);
 
-  if (wifiStaBegin()) {
-    phase_        = Phase::ConnectingSta;
-    staStartedMs_ = millis();
+  Serial.printf("[DEBUG-up1] enter heap=%u\n", ESP.getFreeHeap());
+
+  if (WifiCreds::has()) {
+    // Splash first (no radio), settle, then STA. onIdleTick falls back to AP.
+    phase_ = Phase::ConnectingSta;
     drawConnecting(WifiCreds::ssid());
+    Serial.printf("[DEBUG-up1] splash-sta heap=%u\n", ESP.getFreeHeap());
+    delay(50);  // same settle as AP path — panel current before radio
+    if (!wifiStaBegin()) {
+      Serial.println("[DEBUG-up1] STA begin failed → AP");
+      fallbackToAp();
+      return;
+    }
+    staStartedMs_ = millis();
+    Serial.println("[DEBUG-up1] STA begun");
   } else {
-    // No stored creds — straight to AP, no point showing a splash for a
-    // path we know will time out.
+    drawUploadStarting();
+    Serial.printf("[DEBUG-up1] splash-ap heap=%u\n", ESP.getFreeHeap());
+    delay(50);  // let panel current settle before SoftAP
     net_ = wifiBeginAccessPoint();
+    Serial.printf("[DEBUG-up1] AP up ssid=%s\n", net_.apSsid);
+    delay(100);
     enterReady();
   }
 }
@@ -140,12 +166,18 @@ void UploadScreen::enterReady() {
   phase_     = Phase::Ready;
   startedMs_ = millis();
   server.begin();
+  Serial.printf("[DEBUG-up1] ready mode=%d heap=%u\n",
+                (int)net_.mode, ESP.getFreeHeap());
   draw();
+  Serial.println("[DEBUG-up1] ready draw done");
 }
 
 void UploadScreen::fallbackToAp() {
+  Serial.println("[DEBUG-up1] fallback AP");
   wifiStaAbort();
+  delay(50);
   net_ = wifiBeginAccessPoint();
+  delay(100);
   enterReady();
 }
 

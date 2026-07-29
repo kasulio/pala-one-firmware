@@ -2,10 +2,15 @@
 #define PALA_STATE_H
 
 #include <Arduino.h>
-#include <heltec-eink-modules.h>
 #include <WebServer.h>
 #include <Preferences.h>
 #include <LittleFS.h>
+
+#if defined(SEEED_EE05)
+  #include "src/hal/seeed_display.h"
+#else
+  #include <heltec-eink-modules.h>
+#endif
 
 #include "src/config.h"
 #include "src/pure/paginator.h"     // LayoutMetrics
@@ -23,11 +28,10 @@ extern Preferences prefs;
 extern char AP_SSID[24];
 extern const char* AP_PASS;
 
-// Pick the right Heltec display class based on the env-selected build flag.
-// Set in platformio.ini: [env:wireless-paper-v1_2] / [env:wireless-paper-v1_1].
-// The default branch covers IDE IntelliSense (which parses without PIO env
-// flags); real builds always come through pio with one of the flags set.
-#if defined(DISPLAY_V1_1)
+// Pick the right display class based on the env-selected build flag.
+#if defined(SEEED_EE05)
+  using EInkDisplay = PalaSeeedDisplay;
+#elif defined(DISPLAY_V1_1)
   using EInkDisplay = EInkDisplay_WirelessPaperV1_1;
 #else  // DISPLAY_V1_2 or IntelliSense fallback
   using EInkDisplay = EInkDisplay_WirelessPaperV1_2;
