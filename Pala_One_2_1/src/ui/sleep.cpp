@@ -152,7 +152,12 @@ void enter() {
   esp_wifi_stop();
   btStop();
 
+  // Wireless Paper: sleep LoRa via prepareToSleep(). EE05: panel sleep + rail off.
+#ifdef WIRELESS_PAPER
   Platform::prepareToSleep();
+#elif defined(SEEED_EE05)
+  display.powerOff();
+#endif
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
   // INPUT_PULLUP is in the digital IO domain, which powers down in deep sleep.
   // Route BTN to the RTC IO mux and hold the RTC-domain pull-up so the pin
