@@ -1,12 +1,45 @@
 #include "test_framework.h"
 #include "pure/paths.h"
 
-TEST_CASE("stripTxtExt removes only .txt") {
+TEST_CASE("stripTxtExt removes .txt and .md") {
   CHECK(stripTxtExt("book.txt") == "book");
+  CHECK(stripTxtExt("book.md") == "book");
   CHECK(stripTxtExt("book") == "book");
   CHECK(stripTxtExt("book.TXT") == "book.TXT");  // case-sensitive
+  CHECK(stripTxtExt("book.MD") == "book.MD");
   CHECK(stripTxtExt(".txt") == "");
+  CHECK(stripTxtExt(".md") == "");
   CHECK(stripTxtExt("") == "");
+}
+
+TEST_CASE("isBookFilename accepts .txt and .md") {
+  CHECK(isBookFilename("a.txt"));
+  CHECK(isBookFilename("a.md"));
+  CHECK(isBookFilename("/books/a.txt"));
+  CHECK(isBookFilename("/books/a.md"));
+  CHECK(!isBookFilename("a.bin"));
+  CHECK(!isBookFilename("a.TXT"));
+  CHECK(!isBookFilename("a"));
+  CHECK(!isBookFilename(""));
+}
+
+TEST_CASE("isMarkdownBookPath is .md only") {
+  CHECK(isMarkdownBookPath("notes.md"));
+  CHECK(isMarkdownBookPath("/books/notes.md"));
+  CHECK(!isMarkdownBookPath("notes.txt"));
+  CHECK(!isMarkdownBookPath("/books/notes.txt"));
+  CHECK(!isMarkdownBookPath("notes"));
+  CHECK(!isMarkdownBookPath("notes.MD"));
+}
+
+TEST_CASE("bookPathWithExt swaps book extension") {
+  CHECK(bookPathWithExt("/books/a.txt", ".md") == "/books/a.md");
+  CHECK(bookPathWithExt("/books/a.md", ".txt") == "/books/a.txt");
+  CHECK(bookPathWithExt("/books/fiction/a.txt", ".md") == "/books/fiction/a.md");
+  CHECK(bookPathWithExt("/books/a.txt", ".txt") == "/books/a.txt");
+  CHECK(bookPathWithExt("/books/a.bin", ".md") == "");
+  CHECK(bookPathWithExt("/books/a.txt", ".bin") == "");
+  CHECK(bookPathWithExt("/books/a.txt", nullptr) == "");
 }
 
 TEST_CASE("lastPathComponent") {
@@ -27,6 +60,8 @@ TEST_CASE("folderParent") {
 TEST_CASE("prettyRelativeLabel") {
   CHECK(prettyRelativeLabel("the_great_book.txt") == "the great book");
   CHECK(prettyRelativeLabel("classics/the_iliad.txt") == "classics / the iliad");
+  CHECK(prettyRelativeLabel("notes.md") == "notes");
+  CHECK(prettyRelativeLabel("classics/notes.md") == "classics / notes");
   CHECK(prettyRelativeLabel("plain") == "plain");
 }
 
@@ -69,13 +104,16 @@ TEST_CASE("sanitizeFolderInput normalizes separators and drops dot segments") {
 
 TEST_CASE("sanitizeUploadedFilename") {
   CHECK(sanitizeUploadedFilename("simple.txt") == "simple.txt");
+  CHECK(sanitizeUploadedFilename("notes.md") == "notes.md");
   CHECK(sanitizeUploadedFilename("no_ext") == "no_ext.txt");
   CHECK(sanitizeUploadedFilename("path/to/file.txt") == "file.txt");
+  CHECK(sanitizeUploadedFilename("path/to/notes.md") == "notes.md");
   CHECK(sanitizeUploadedFilename("..hidden.txt") == "hidden.txt");
   CHECK(sanitizeUploadedFilename("with..parent.txt") == "withparent.txt");
   CHECK(sanitizeUploadedFilename("weird!@#chars.txt") == "weird___chars.txt");
   // Numeric, punctuation in middle stays as filename
   CHECK(sanitizeUploadedFilename("a1-b2.txt") == "a1-b2.txt");
+  CHECK(sanitizeUploadedFilename("a1-b2.md") == "a1-b2.md");
 }
 
 TEST_CASE("sanitizeUploadedAppFilename") {

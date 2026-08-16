@@ -10,6 +10,7 @@
 #include "src/storage/statistics.h"         // Statistics::onReaderPageTurn
 
 #include "src/ui/font.h"                    // layoutForCache for cache stamping
+#include "src/pure/paths.h"                 // isMarkdownBookPath
 #include "src/ui/screens/library_screen.h"  // navigateToLibraryRoot — fallback on error
 #include "src/ui/statusbar.h"               // Statusbar::mode for the per-mode statusbar render
 #include "src/ui/text.h"
@@ -246,6 +247,8 @@ bool openBookByIndex(int idx) {
 
   String path(p);
   if (!g_bookview.book.open(path)) return false;
+
+  Font::setMarkdownEnabled(isMarkdownBookPath(path));
 
   g_bookview.pages.count = 1;
   g_bookview.pages.offsets[0] = 0;
@@ -491,6 +494,7 @@ void resetBookView() {
   g_bookview.book.close();
   g_bookview.cursor = ReaderCursor{};
   g_bookview.pages  = PageOffsetTable{};
+  Font::setMarkdownEnabled(false);
   resetSaveThrottle();
 }
 

@@ -1,7 +1,24 @@
 #include "paths.h"
 
 String stripTxtExt(const String& s) {
-  return s.endsWith(".txt") ? s.substring(0, s.length() - 4) : s;
+  if (s.endsWith(".txt")) return s.substring(0, s.length() - 4);
+  if (s.endsWith(".md"))  return s.substring(0, s.length() - 3);
+  return s;
+}
+
+bool isBookFilename(const String& s) {
+  return s.endsWith(".txt") || s.endsWith(".md");
+}
+
+bool isMarkdownBookPath(const String& s) {
+  return s.endsWith(".md");
+}
+
+String bookPathWithExt(const String& path, const char* ext) {
+  if (!ext || !isBookFilename(path)) return String();
+  String e(ext);
+  if (e != ".txt" && e != ".md") return String();
+  return stripTxtExt(path) + e;
 }
 
 String lastPathComponent(const String& path) {
@@ -100,7 +117,7 @@ String sanitizeUploadedFilename(String fname) {
 
   clean.replace("..", "");
   while (clean.startsWith(".")) clean.remove(0, 1);
-  if (!clean.endsWith(".txt")) clean += ".txt";
+  if (!isBookFilename(clean)) clean += ".txt";
   if (clean.length() == 0) clean = "book.txt";
   return clean;
 }

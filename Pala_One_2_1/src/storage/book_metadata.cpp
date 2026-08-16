@@ -113,5 +113,10 @@ void migrateBookMetadata(const String& oldPath, const String& newPath) {
   PreferencesStore kv(prefs);
   renameBookMetadata(kv, prefKeyForBook(oldPath), prefKeyForBook(newPath));
   renamePageCacheForBook(oldPath, newPath);
+
+  // Sleep-resume stores the raw path, not the hash key.
+  if (prefs.getString("wake_path", "") == oldPath) {
+    prefs.putString("wake_path", newPath);
+  }
 }
 #endif  // ARDUINO

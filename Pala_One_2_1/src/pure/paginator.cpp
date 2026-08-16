@@ -15,7 +15,9 @@ uint32_t paginatePage(IReadStream& in,
                       uint32_t startPos,
                       const LayoutMetrics& m,
                       const MeasureFn& measure,
-                      const LineCallback& onLine) {
+                      const LineCallback& onLine,
+                      const SoftWrapCommitFn& onSoftWrapCommit,
+                      const StyleResetFn& onStyleReset) {
   in.seek(startPos);
 
   // Vertical layout is tracked in PIXELS (usedH), not whole-line counts, so a
@@ -32,25 +34,18 @@ uint32_t paginatePage(IReadStream& in,
   char line[kLineMax];
   // Indicates how many characters of line are part of the current line.
   size_t lineLen = 0;
-  // This indicates the current calculated width of everything
-  // already added to the current line.
+  // Current calculated width of everything already added to the current line.
+  // Unused when onSoftWrapCommit is set (full-line measure).
   int lineW = 0;
-  // In order to avoid recomputing the width of the whole line
-  // every time we only recalculate based on the previously
-  // added tokens up to the last whitespace which we refer to as the tail.
-  // tailStart indicates where in the current line the tail beings.
+  // Tail = bytes after the last whitespace. Tail-only measure is valid when
+  // a prefix cannot change later-token widths (plain text). Markdown passes
+  // onSoftWrapCommit and measures the full candidate line instead.
   size_t tailStart = 0;
-  // tailW indicates how wide the tail was at the time it was
-  // incorporated into the line. lineW already includes tailW
-  // which is why you'll see a lot of lineW - tailW in the token
-  // addition calculations.
   int tailW = 0;
   int spaceW = -1;
   // This holds the accumulated token that should next be added to the current line.
   char token[kTokenMax] = {}; size_t tokLen  = 0;
-  // This is a scratch pad used to recalculate the length of the tail when the
-  // latest token is added to it to see if the new token will push the line over
-  // the line limit.
+  // Scratch for tail+token (plain) or full candidate line (markdown).
   char scratch[kScratchMax];
 
   uint32_t lineStartPos  = startPos;
@@ -78,10 +73,17 @@ uint32_t paginatePage(IReadStream& in,
   // according to pixel budgets.
   auto pageFull = [&]() -> bool { return usedH + m.lineH > budgetH; };
 
-  auto flushLine = [&]() {
+  // softWrap=true: width/token split — commit MD style for the next visual
+  // line. softWrap=false: source newline / end flush — reset MD style.
+  auto flushLine = [&](bool softWrap) {
     trimTrailing(line, lineLen);
     line[lineLen] = 0;
     emit(line, lineLen);
+    if (softWrap) {
+      if (onSoftWrapCommit) onSoftWrapCommit(line, lineLen);
+    } else if (onStyleReset) {
+      onStyleReset();
+    }
     lineLen = 0;
     lineW = 0;
     tailStart = 0;
@@ -127,6 +129,8 @@ uint32_t paginatePage(IReadStream& in,
       char saved = token[fitLen];
       token[fitLen] = 0;
       emit(token, fitLen);
+      // Mid-token hard break is a soft wrap for markdown style carry.
+      if (onSoftWrapCommit) onSoftWrapCommit(token, fitLen);
       token[fitLen] = saved;
 
       if (pageFull())
@@ -167,32 +171,36 @@ uint32_t paginatePage(IReadStream& in,
     if (lineLen == 0) {
       return startLineWithToken(measure(token));
     }
-    // Only put the tail and the token into scratch to recompute width
-    // since the new token isn't going to be able to influence the layout
-    // of anything before that.
-    const size_t tailLen = lineLen - tailStart;
-    memcpy(scratch, line + tailStart, tailLen);
-    memcpy(scratch + tailLen, token, tokLen);
-    scratch[tailLen + tokLen] = 0;
-    const int combinedW = measure(scratch);
-    // lineW includes the width of the tail without the new token, so we
-    // need to subtract that here before adding the width of tail + token.
-    const int candidateW = lineW - tailW + combinedW;
+
+    int candidateW;
+    int combinedW = 0;
+    if (onSoftWrapCommit) {
+      // Full line: a prefix can change the face of this token (`**bold more**`).
+      memcpy(scratch, line, lineLen);
+      memcpy(scratch + lineLen, token, tokLen);
+      scratch[lineLen + tokLen] = 0;
+      candidateW = measure(scratch);
+    } else {
+      const size_t tailLen = lineLen - tailStart;
+      memcpy(scratch, line + tailStart, tailLen);
+      memcpy(scratch + tailLen, token, tokLen);
+      scratch[tailLen + tokLen] = 0;
+      combinedW = measure(scratch);
+      candidateW = lineW - tailW + combinedW;
+    }
 
     if (candidateW > m.maxWidth) {
-      flushLine();
+      flushLine(/*softWrap=*/true);
       if (pageFull()) return safeReturn(tokenStartPos);
       return startLineWithToken(measure(token));
     }
 
-    // The token fits entirely, perhaps having modified the tail
-    // width. Regardless, candidateW is the new width of the line.
-    // The tail only moves forward on whitespace so for the moment
-    // the start remains the same and the width becomes combinedW.
     memcpy(line + lineLen, token, tokLen);
     lineLen += tokLen;
-    lineW = candidateW;
-    tailW = combinedW;
+    if (!onSoftWrapCommit) {
+      lineW = candidateW;
+      tailW = combinedW;
+    }
     tokLen = 0;
     return 0;
   };
@@ -213,9 +221,10 @@ uint32_t paginatePage(IReadStream& in,
         if (usedH > 0) {
           usedH += gapH;
           if (onLine) onLine("", 0);
+          if (onStyleReset) onStyleReset();
         }
       } else {
-        flushLine();
+        flushLine(/*softWrap=*/false);
       }
       if (pageFull()) return safeReturn(in.position());
       lineStartPos = in.position();
@@ -226,19 +235,19 @@ uint32_t paginatePage(IReadStream& in,
       uint32_t forcedNext = appendTokenToLine();
       if (forcedNext != 0) return forcedNext;
       if (lineLen > 0 && !lineEndsWithSpace() && lineLen < kLineMax - 1) {
-        // Same telescoping method as a token append: the trailing space's
-        // marginal width is measure(tail + " ") - measure(tail), in case the space
-        // modifies the tail's width. The space then starts a fresh one-byte trailing
-        // chunk.
-        if (spaceW < 0) spaceW = measure(" ");
-        const size_t tailLen = lineLen - tailStart;
-        memcpy(scratch, line + tailStart, tailLen);
-        scratch[tailLen] = ' ';
-        scratch[tailLen + 1] = 0;
-        lineW += measure(scratch) - tailW;
+        if (!onSoftWrapCommit) {
+          if (spaceW < 0) spaceW = measure(" ");
+          const size_t tailLen = lineLen - tailStart;
+          memcpy(scratch, line + tailStart, tailLen);
+          scratch[tailLen] = ' ';
+          scratch[tailLen + 1] = 0;
+          lineW += measure(scratch) - tailW;
+        }
         line[lineLen++] = ' ';
-        tailStart = lineLen - 1;
-        tailW = spaceW;
+        if (!onSoftWrapCommit) {
+          tailStart = lineLen - 1;
+          tailW = spaceW;
+        }
       }
       continue;
     }
@@ -263,7 +272,7 @@ uint32_t paginatePage(IReadStream& in,
   if (forcedNext != 0) return forcedNext;
 
   if (!pageFull() && lineLen > 0) {
-    flushLine();
+    flushLine(/*softWrap=*/false);
   }
 
   return safeReturn(in.position());

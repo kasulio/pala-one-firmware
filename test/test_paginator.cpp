@@ -1,6 +1,7 @@
 #include <vector>
 
 #include "test_framework.h"
+#include "pure/md_style.h"
 #include "pure/paginator.h"
 
 namespace {
@@ -143,4 +144,90 @@ TEST_CASE("skip empty lines at start of page") {
   CHECK_EQ(lines[0], String("One"));
   CHECK_EQ(lines[1], String("Two"));
   CHECK_EQ(lines[2], String("Three"));
+}
+
+TEST_CASE("paginator soft-wrap commits style; hard newline resets") {
+  MdStyleState st;
+  std::vector<String> lines;
+  StringReadStream in("hello *world there\nplain");
+  // Width 12 (non-marker bytes): soft-wrap mid-italic, then hard newline.
+  auto measure = [&](const char* s) -> int {
+    MdStyleState tmp = st;
+    int w = 0;
+    forEachMdStyleRun(s, [&](const char* /*seg*/, int len, bool, bool) { w += len; }, &tmp);
+    return w;
+  };
+  LayoutMetrics lm = m(12, 5);
+  bool sawSoftCommit = false;
+  bool sawResetAfterSoft = false;
+  paginatePage(
+      in, 0, lm, measure,
+      [&](const char* buf, size_t) { lines.push_back(String(buf)); },
+      [&](const char* buf, size_t) {
+        sawSoftCommit = true;
+        mdAdvanceStyle(buf, &st);
+        CHECK(st.italic);  // open * on first visual line
+      },
+      [&]() {
+        if (sawSoftCommit) sawResetAfterSoft = true;
+        st = MdStyleState{};
+      });
+
+  REQUIRE(lines.size() >= 3u);
+  CHECK(sawSoftCommit);
+  CHECK(sawResetAfterSoft);
+  CHECK(!st.italic);
+  CHECK(!st.bold);
+}
+
+TEST_CASE("paginator measures full line so mid-line **bold** wrap uses bold widths") {
+  // `**bb cc**`: content widths 2+2+1 space, all bold → 4+2+4 = 10.
+  // Tail-only measure of ` cc**` starts roman → space 1 + `cc` 2 = 3, so
+  // `**bb `(6) + 3 = 9, which fits maxWidth 8. Full-line measure is 10 and
+  // must wrap `cc**` onto the next visual line.
+  MdStyleState st;
+  std::vector<String> lines;
+  StringReadStream in("**bb cc**");
+  auto measure = [&](const char* s) -> int {
+    MdStyleState tmp = st;
+    int w = 0;
+    forEachMdStyleRun(s, [&](const char* /*seg*/, int len, bool bold, bool italic) {
+      w += len * ((bold || italic) ? 2 : 1);
+    }, &tmp);
+    return w;
+  };
+  paginatePage(
+      in, 0, m(8, 3), measure,
+      [&](const char* buf, size_t) { lines.push_back(String(buf)); },
+      [&](const char* buf, size_t) { mdAdvanceStyle(buf, &st); },
+      [&]() { st = MdStyleState{}; });
+
+  REQUIRE(lines.size() == 2u);
+  CHECK_EQ(lines[0], String("**bb"));
+  CHECK_EQ(lines[1], String("cc**"));
+}
+
+TEST_CASE("paginator page start keeps open italic; recover matches prefix") {
+  const char* src = "hello *world there extra";
+  MdStyleState st;
+  auto measure = [&](const char* s) -> int {
+    MdStyleState tmp = st;
+    int w = 0;
+    forEachMdStyleRun(s, [&](const char* /*seg*/, int len, bool, bool) { w += len; }, &tmp);
+    return w;
+  };
+  StringReadStream in(src);
+  uint32_t next = paginatePage(
+      in, 0, m(12, 1), measure, nullptr,
+      [&](const char* buf, size_t) { mdAdvanceStyle(buf, &st); },
+      [&]() { st = MdStyleState{}; });
+
+  CHECK(st.italic);
+  CHECK(!st.bold);
+  CHECK(next > 0u);
+
+  MdStyleState recovered;
+  mdRecoverStyle(src, next, &recovered);
+  CHECK(recovered.italic);
+  CHECK(!recovered.bold);
 }

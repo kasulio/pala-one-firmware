@@ -10,6 +10,7 @@
 #include "src/storage/fs_util.h"
 #include "src/storage/app_catalog.h"
 #include "src/storage/library.h"
+#include "src/storage/page_cache.h"
 #include "src/storage/preferences_store.h"
 #include "src/ui/text.h"            // pageOffsetForPage
 #include "src/web/chrome.h"
@@ -17,11 +18,12 @@
 // ============================================================================
 //  /               — landing page (storage card + upload form)
 //  /files          — file/folder browser
-//  /download-book  — GET: stream book .txt as attachment (?id=N)
+//  /download-book  — GET: stream book (.txt/.md) as attachment (?id=N)
 //  /del            — POST: delete book
 //  /mkdir          — POST: create folder
 //  /rmdir          — POST: delete (empty) folder
 //  /move           — POST: move book to a different folder
+//  /set-format     — POST: rename .txt ↔ .md (keeps progress/bookmarks)
 //  /jumppage       — POST: set the page that opens next on device
 // ============================================================================
 
@@ -44,10 +46,13 @@ static void handleDownloadBook() {
   }
 
   String filename = lastPathComponent(path);
+  const char* contentType = filename.endsWith(".md")
+                              ? "text/markdown; charset=utf-8"
+                              : "text/plain; charset=utf-8";
   server.setContentLength(f.size());
   server.sendHeader("Content-Disposition",
                     "attachment; filename=\"" + filename + "\"");
-  server.send(200, "text/plain; charset=utf-8", "");
+  server.send(200, contentType, "");
 
   WiFiClient client = server.client();
   uint8_t buf[512];
@@ -86,7 +91,7 @@ static void handleRoot() {
     "<div class='card'><h2>" D_WEB_UPLOAD_BOOK_HEADING "</h2>"
     "<p class='muted'>" D_WEB_UPLOAD_BOOK_DESC "</p>"
     "<form method='POST' action='/upload' enctype='multipart/form-data' accept-charset='UTF-8' style='margin-top:14px'>"
-    "<input type='file' name='file' accept='.txt,text/plain' required>"
+    "<input type='file' name='file' accept='.txt,.md,text/plain,text/markdown' required>"
     "<div class='actions'><button type='submit'>" D_WEB_UPLOAD_BOOK_BUTTON "</button><a class='btn secondary' href='/files'>" D_WEB_MANAGE_FILES_BUTTON "</a></div>"
     "</form></div>";
 
@@ -156,6 +161,7 @@ static void handleFiles() {
       out += String((int)g_library.books[i].size);
       out += D_WEB_BOOK_BYTES_LABEL D_WEB_BOOK_FOLDER_LABEL;
       out += htmlEscape(folderLabel);
+      out += isMarkdownBookPath(filePath) ? D_WEB_BOOK_FORMAT_MD : D_WEB_BOOK_FORMAT_TXT;
       out += D_WEB_BOOK_CURRENT_PAGE;
       out += String(savedPage);
       out += "</div>";
@@ -173,6 +179,17 @@ static void handleFiles() {
       out += "<div class='actions'><button type='submit'>" D_WEB_MOVE_BUTTON "</button><span class='muted'>" D_WEB_MOVE_HINT "</span></div></form></div>";
       out += "<div style='display:flex;flex-direction:column;gap:6px;align-items:flex-end'>";
       out += "<a class='btn secondary' href='/download-book?id=" + String(i) + "' download>" D_WEB_DOWNLOAD_BUTTON "</a>";
+      {
+        const bool asMd = isMarkdownBookPath(filePath);
+        out += "<form method='POST' action='/set-format' style='margin:0'>";
+        out += "<input type='hidden' name='id' value='" + String(i) + "'>";
+        out += "<input type='hidden' name='format' value='";
+        out += asMd ? "txt" : "md";
+        out += "'>";
+        out += "<button type='submit' class='btn secondary'>";
+        out += asMd ? D_WEB_TREAT_AS_TXT_BUTTON : D_WEB_TREAT_AS_MD_BUTTON;
+        out += "</button></form>";
+      }
       out += "<form method='POST' action='/del' style='margin:0'><input type='hidden' name='id' value='" + String(i) + "'>";
       out += "<button type='submit' class='btn secondary' onclick=\"return confirm('" D_WEB_CONFIRM_DELETE_FILE "')\">" D_WEB_DELETE_BUTTON "</button></form>";
       out += "</div></div></li>";
@@ -342,6 +359,61 @@ static void handleMoveBook() {
   server.send(302, "text/plain", "");
 }
 
+static void handleSetFormat() {
+  if (!server.hasArg("id") || !server.hasArg("format")) {
+    server.send(400, "text/plain; charset=utf-8", D_WEB_ERR_MISSING_ID_FORMAT);
+    return;
+  }
+
+  int id = server.arg("id").toInt();
+  if (id < 0 || id >= g_library.bookCount) {
+    server.send(400, "text/plain; charset=utf-8", D_WEB_ERR_BAD_ID);
+    return;
+  }
+
+  String format = server.arg("format");
+  format.trim();
+  const char* ext = nullptr;
+  if (format == "md")       ext = ".md";
+  else if (format == "txt") ext = ".txt";
+  else {
+    server.send(400, "text/plain; charset=utf-8", D_WEB_ERR_BAD_FORMAT);
+    return;
+  }
+
+  String oldPath = String(g_library.books[id].path);
+  String newPath = bookPathWithExt(oldPath, ext);
+  if (newPath.length() == 0) {
+    server.send(400, "text/plain; charset=utf-8", D_WEB_ERR_BAD_ID);
+    return;
+  }
+  if (newPath == oldPath) {
+    server.sendHeader("Location", "/files");
+    server.send(302, "text/plain", "");
+    return;
+  }
+  if (FS.exists(newPath)) {
+    server.send(409, "text/plain; charset=utf-8", D_WEB_ERR_DEST_EXISTS);
+    return;
+  }
+
+  // Library entry already cleared g_bookview; no book is "current" here.
+  if (!FS.rename(oldPath, newPath)) {
+    server.send(500, "text/plain; charset=utf-8", D_WEB_ERR_FORMAT_FAILED);
+    return;
+  }
+
+  // Progress + bookmarks move with the path hash. Drop the page cache —
+  // markdown vs plain changes measured widths. migrate would rename it.
+  deletePageCacheForBook(oldPath);
+  migrateBookMetadata(oldPath, newPath);
+
+  loadBooks();
+
+  server.sendHeader("Location", "/files");
+  server.send(302, "text/plain", "");
+}
+
 static void handleJumpPageWeb() {
   if (!server.hasArg("id") || !server.hasArg("page")) {
     server.send(400, "text/plain; charset=utf-8", D_WEB_ERR_MISSING_ID_PAGE);
@@ -387,5 +459,6 @@ void registerFilesRoutes() {
   server.on("/mkdir",    HTTP_POST, handleCreateFolder);
   server.on("/rmdir",    HTTP_POST, handleDeleteFolder);    // POST: destructive
   server.on("/move",     HTTP_POST, handleMoveBook);
+  server.on("/set-format", HTTP_POST, handleSetFormat);
   server.on("/jumppage", HTTP_POST, handleJumpPageWeb);
 }

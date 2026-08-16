@@ -13,6 +13,7 @@
 build/
 *.elf
 *.bin
+*.ino.cpp
 .theia/
 
 # Host-test build artifacts (any test/build* variant — covers per-language
@@ -28,3 +29,6 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# Local scratch: one-off build tools, font experiments, preview PNGs
+.scratch/

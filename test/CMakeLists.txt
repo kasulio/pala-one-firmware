@@ -33,6 +33,7 @@ set(TEST_SRC
   ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_paths.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_text_util.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_md_style.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_hashing.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_paginator.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_library_nav.cpp

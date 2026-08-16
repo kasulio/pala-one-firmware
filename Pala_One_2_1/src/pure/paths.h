@@ -5,8 +5,18 @@
 
 // Pure path / folder / filename utilities. No hardware deps.
 
-// ".txt" extension stripping. "book.txt" -> "book", "book" -> "book".
+// Strip a book extension. "book.txt" / "book.md" -> "book", "book" -> "book".
 String stripTxtExt(const String& s);
+
+// True if path/filename ends with a catalogued book extension (.txt or .md).
+bool isBookFilename(const String& s);
+
+// True if path should be measured/drawn with markdown styling (.md suffix).
+bool isMarkdownBookPath(const String& s);
+
+// Same directory + stem as `path`, with `ext` (".txt" or ".md"). Empty if
+// `path` is not a book file or `ext` is not a book extension.
+String bookPathWithExt(const String& path, const char* ext);
 
 // Last "/" component. "/a/b/c" -> "c", "c" -> "c".
 String lastPathComponent(const String& path);
@@ -14,14 +24,14 @@ String lastPathComponent(const String& path);
 // Parent folder of a relative path. "a/b/c" -> "a/b", "c" -> "".
 String folderParent(const String& relPath);
 
-// Replace '_' with ' ' and '/' with ' / ', strip ".txt". For UI display.
+// Replace '_' with ' ' and '/' with ' / ', strip book extension. For UI display.
 String prettyRelativeLabel(const String& relPath);
 
 // Last component with '_' -> ' '. For UI display.
 String folderLeafLabel(const String& relPath);
 
 // Display label for a book path: strip the leading folders, strip the
-// ".txt" suffix, replace '_' with ' '.
+// book extension (.txt/.md), replace '_' with ' '.
 String bookLeafLabel(const String& path);
 
 // Byte-level character set used by sanitizeFolderSegment.
@@ -35,8 +45,8 @@ String sanitizeFolderSegment(const String& segment);
 String sanitizeFolderInput(const String& raw);
 
 // Sanitize a user-uploaded filename. Removes path components, restricts to a
-// safe byte set, kills repeated "..", ensures ".txt" suffix, falls back to
-// "book.txt" if empty.
+// safe byte set, kills repeated "..", keeps ".txt"/".md" (else appends
+// ".txt"), falls back to "book.txt" if empty.
 String sanitizeUploadedFilename(String fname);
 
 // Sibling of `sanitizeUploadedFilename` for app .bin uploads. Removes path

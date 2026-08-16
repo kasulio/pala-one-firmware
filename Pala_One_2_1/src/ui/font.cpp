@@ -5,19 +5,29 @@
 
 #include "src/config.h"
 #include "src/hal/display.h"  // u8g2 instance
+#include "src/pure/md_style.h" // forEachMdStyleRun
 #include "src/state.h"        // prefs
 #include "src/ui/statusbar.h" // Statusbar::reserveH
 
 // OpenDyslexic u8g2 font tables. Vendored alongside the sketch (see
 // Pala_One_2_1/opendyslexic_u8g2_fonts.h). Only referenced from this file.
 #include "opendyslexic_u8g2_fonts.h"
+// Helvetica oblique (italic / bold-italic) — Adobe helvO/helvBO BDFs
+// (same PIXEL_SIZE as stock helvR/helvB). See helvetica_italic_u8g2_fonts.h
+// (regen via .scratch/italic-fonts/gen_helvetica_italic_fonts.sh).
+#include "helvetica_italic_u8g2_fonts.h"
 
 namespace Font {
 
 // File-private font tables. The rest of the codebase only ever sees the
 // role accessors (useBody, useBold, ...).
-static const uint8_t* s_body    = u8g2_font_helvR08_te;
-static const uint8_t* s_bold    = u8g2_font_helvB08_te;
+static const uint8_t* s_body       = u8g2_font_helvR08_te;
+static const uint8_t* s_bold       = u8g2_font_helvB08_te;
+// Italic / bold-italic: Adobe Helvetica oblique tables (helvI / helvBI),
+// generated from the same Adobe X11 BDFs as body/bold so letterforms match.
+// Used only for markdown *italic* when Helvetica + bionic-off.
+static const uint8_t* s_italic     = u8g2_font_helvI08_te;
+static const uint8_t* s_boldItalic = u8g2_font_helvBI08_te;
 // _tf = ASCII only. Translated strings must NOT use these — see font.h.
 static const uint8_t* s_uiSmall = u8g2_font_6x10_tf;
 static const uint8_t* s_uiTiny  = u8g2_font_5x8_tf;
@@ -34,6 +44,7 @@ static const uint8_t* s_toast   = u8g2_font_helvR08_te;
 static int    s_size    = 10;
 static int    s_lineGap = 0;
 static Family s_family  = Family::Helvetica;
+static bool   s_markdown = false;
 static bool   s_bionic  = false;
 static bool   s_halfGaps = false;
 
@@ -49,26 +60,48 @@ static constexpr const char* kKeyFamily     = "cfg_font_fam";
 static constexpr const char* kKeyBionic     = "cfg_bionic";
 static constexpr const char* kKeyHalfGaps   = "cfg_hgap";
 
-// Pick the (regular, bold) pair for a given size + family. Centralized so
-// applyBodySize and applyFamily share one switch. Returns true if `sz` was
-// in the supported set; out params are always set (10pt fallback otherwise).
+// Pick the (regular, bold, italic, bold-italic) set for a given size +
+// family. Centralized so applyBodySize and applyFamily share one switch.
+// Returns true if `sz` was in the supported set; out params are always set
+// (10pt fallback otherwise). OpenDyslexic has no italic tables — italic
+// outs fall back to body/bold (markdown is gated off for that family).
 static bool pickFaces(int sz, Family fam,
-                      const uint8_t*& outBody, const uint8_t*& outBold) {
+                      const uint8_t*& outBody, const uint8_t*& outBold,
+                      const uint8_t*& outItalic, const uint8_t*& outBoldItalic) {
   if (fam == Family::OpenDyslexic) {
     switch (sz) {
-      case 8:  outBody = u8g2_font_open_dys_r08_te; outBold = u8g2_font_open_dys_b08_te; return true;
-      case 10: outBody = u8g2_font_open_dys_r10_te; outBold = u8g2_font_open_dys_b10_te; return true;
-      case 12: outBody = u8g2_font_open_dys_r12_te; outBold = u8g2_font_open_dys_b12_te; return true;
-      case 14: outBody = u8g2_font_open_dys_r14_te; outBold = u8g2_font_open_dys_b14_te; return true;
-      default: outBody = u8g2_font_open_dys_r10_te; outBold = u8g2_font_open_dys_b10_te; return false;
+      case 8:  outBody = u8g2_font_open_dys_r08_te; outBold = u8g2_font_open_dys_b08_te; break;
+      case 10: outBody = u8g2_font_open_dys_r10_te; outBold = u8g2_font_open_dys_b10_te; break;
+      case 12: outBody = u8g2_font_open_dys_r12_te; outBold = u8g2_font_open_dys_b12_te; break;
+      case 14: outBody = u8g2_font_open_dys_r14_te; outBold = u8g2_font_open_dys_b14_te; break;
+      default: outBody = u8g2_font_open_dys_r10_te; outBold = u8g2_font_open_dys_b10_te;
+               outItalic = outBody; outBoldItalic = outBold; return false;
     }
+    outItalic = outBody;
+    outBoldItalic = outBold;
+    return true;
   }
   switch (sz) {
-    case 8:  outBody = u8g2_font_helvR08_te; outBold = u8g2_font_helvB08_te; return true;
-    case 10: outBody = u8g2_font_helvR10_te; outBold = u8g2_font_helvB10_te; return true;
-    case 12: outBody = u8g2_font_helvR12_te; outBold = u8g2_font_helvB12_te; return true;
-    case 14: outBody = u8g2_font_helvR14_te; outBold = u8g2_font_helvB14_te; return true;
-    default: outBody = u8g2_font_helvR10_te; outBold = u8g2_font_helvB10_te; return false;
+    case 8:
+      outBody = u8g2_font_helvR08_te; outBold = u8g2_font_helvB08_te;
+      outItalic = u8g2_font_helvI08_te; outBoldItalic = u8g2_font_helvBI08_te;
+      return true;
+    case 10:
+      outBody = u8g2_font_helvR10_te; outBold = u8g2_font_helvB10_te;
+      outItalic = u8g2_font_helvI10_te; outBoldItalic = u8g2_font_helvBI10_te;
+      return true;
+    case 12:
+      outBody = u8g2_font_helvR12_te; outBold = u8g2_font_helvB12_te;
+      outItalic = u8g2_font_helvI12_te; outBoldItalic = u8g2_font_helvBI12_te;
+      return true;
+    case 14:
+      outBody = u8g2_font_helvR14_te; outBold = u8g2_font_helvB14_te;
+      outItalic = u8g2_font_helvI14_te; outBoldItalic = u8g2_font_helvBI14_te;
+      return true;
+    default:
+      outBody = u8g2_font_helvR10_te; outBold = u8g2_font_helvB10_te;
+      outItalic = u8g2_font_helvI10_te; outBoldItalic = u8g2_font_helvBI10_te;
+      return false;
   }
 }
 
@@ -76,18 +109,18 @@ static bool pickFaces(int sz, Family fam,
 // cache. Any out-of-set size falls back to 10. Does NOT persist — public
 // callers go through setBodySize() / loadSettings().
 static void applyBodySize(int sz) {
-  if (!pickFaces(sz, s_family, s_body, s_bold)) sz = 10;
+  if (!pickFaces(sz, s_family, s_body, s_bold, s_italic, s_boldItalic)) sz = 10;
   s_size = sz;
   s_layoutValid = false;
 }
 
-// In-memory family apply: refresh the (body, bold) pair for the current
-// size under the new family. Does NOT persist.
+// In-memory family apply: refresh the face set for the current size under
+// the new family. Does NOT persist.
 static void applyFamily(Family fam) {
   s_family = fam;
   // pickFaces always writes the out params; current s_size determines the
   // size half of the (size, family) lookup.
-  (void)pickFaces(s_size, s_family, s_body, s_bold);
+  (void)pickFaces(s_size, s_family, s_body, s_bold, s_italic, s_boldItalic);
   s_layoutValid = false;
 }
 
@@ -100,12 +133,28 @@ static void applyLineGap(int gap) {
   s_layoutValid = false;
 }
 
-void useBody()     { u8g2.setFont(s_body); }
-void useBold()     { u8g2.setFont(s_bold); }
-void useToast()    { u8g2.setFont(s_toast); }
-void useUiSmall()  { u8g2.setFont(s_uiSmall); }
-void useUiTiny()   { u8g2.setFont(s_uiTiny); }
-void useAppLarge() { u8g2.setFont(u8g2_font_helvB14_te); }
+// u8g2_SetFont() forces is_transparent=0. Opaque bg (WHITE) then erases
+// prior ink wherever the next glyph's BBX overlaps — italic negative
+// sidebearings (e.g. helvO08 'g' xoff=-1) make "ng" lose pixels on device.
+static void setFace(const uint8_t* font) {
+  u8g2.setFont(font);
+  u8g2.setFontMode(1);
+}
+
+void useBody()     { setFace(s_body); }
+void useBold()     { setFace(s_bold); }
+void useToast()    { setFace(s_toast); }
+void useUiSmall()  { setFace(s_uiSmall); }
+void useUiTiny()   { setFace(s_uiTiny); }
+void useAppLarge() { setFace(u8g2_font_helvB14_te); }
+
+// Markdown face picker — Body / Bold / Italic / BoldItalic.
+static void useMdFace(bool bold, bool italic) {
+  if (bold && italic) setFace(s_boldItalic);
+  else if (bold)      setFace(s_bold);
+  else if (italic)    setFace(s_italic);
+  else                setFace(s_body);
+}
 
 const LayoutMetrics& bodyLayout() {
   if (!s_layoutValid) {
@@ -168,6 +217,9 @@ void setHalfParagraphGaps(bool on) {
   s_layoutValid = false;
   prefs.putInt(kKeyHalfGaps, on ? 1 : 0);
 }
+
+void setMarkdownEnabled(bool on) { s_markdown = on; }
+bool markdownEnabled() { return s_markdown; }
 
 int    currentBodySize() { return s_size; }
 int    currentLineGap()  { return s_lineGap; }
@@ -301,6 +353,25 @@ static void printSlice(int x, int y, const char* src, int len) {
   u8g2.print(scratch);
 }
 
+// Positive x-offset of the first glyph (0 if none / negative). Italic faces
+// typically sit +1..+4 of the cursor; used as a draw-only left nudge.
+static int firstGlyphXOff(const char* src, int len) {
+  if (!src || len <= 0) return 0;
+  uint8_t b0 = (uint8_t)src[0];
+  uint16_t enc = 0;
+  if (b0 < 0x80) enc = b0;
+  else if ((b0 & 0xE0) == 0xC0 && len >= 2)
+    enc = (uint16_t)(((b0 & 0x1F) << 6) | ((uint8_t)src[1] & 0x3F));
+  else if ((b0 & 0xF0) == 0xE0 && len >= 3)
+    enc = (uint16_t)(((b0 & 0x0F) << 12)
+                     | (((uint8_t)src[1] & 0x3F) << 6)
+                     | ((uint8_t)src[2] & 0x3F));
+  if (enc == 0) return 0;
+  u8g2_GetGlyphWidth(&u8g2.u8g2, enc);
+  int xoff = u8g2.u8g2.glyph_x_offset;
+  return xoff > 0 ? xoff : 0;
+}
+
 // Width of one rendered word — measures the bold prefix in the Bold face
 // and the tail in the Body face, plus kBionicRestGapPx between them.
 // Falls back to a single Body measurement if the word doesn't qualify.
@@ -318,58 +389,101 @@ static int measureBionicWord(const char* word, int len) {
   return wStrong + kBionicRestGapPx + wTail;
 }
 
-int measureBionicLine(const char* line) {
-  if (!line) return 0;
-  if (!s_bionic) {
-    useBody();
-    return u8g2.getUTF8Width(line);
-  }
-  int total = 0;
-  forEachLineSegment(line, [&](const char* seg, int segLen, bool isWord) {
-    if (!isWord) {
-      useBody();
-      total += measureSlice(seg, segLen);
-      return;
-    }
-    total += measureBionicWord(seg, segLen);
-  });
-  useBody();
-  return total;
+// Markdown **bold** / *italic* is active only for .md books under Helvetica
+// with bionic off — avoids colliding with bionic prefixes, and OpenDyslexic
+// has no italic tables. Plain .txt keeps literal asterisks.
+static bool markdownStyleActive() {
+  return s_markdown && s_family == Family::Helvetica && !s_bionic;
 }
 
-void drawBionicLine(int x, int y, const char* line) {
-  if (!line) return;
-  if (!s_bionic) {
+int measureBionicLine(const char* line, MdStyleState* ioStyle) {
+  if (!line) return 0;
+  if (s_bionic) {
+    int total = 0;
+    forEachLineSegment(line, [&](const char* seg, int segLen, bool isWord) {
+      if (!isWord) {
+        useBody();
+        total += measureSlice(seg, segLen);
+        return;
+      }
+      total += measureBionicWord(seg, segLen);
+    });
     useBody();
-    u8g2.setCursor(x, y);
-    u8g2.print(line);
+    return total;
+  }
+  if (markdownStyleActive()) {
+    const char* text = line;
+    const bool heading = mdAtxHeading(line, &text) > 0;
+    MdStyleState local;
+    MdStyleState* st = ioStyle ? ioStyle : &local;
+    int total = 0;
+    forEachMdStyleRun(text, [&](const char* seg, int segLen, bool bold, bool italic) {
+      useMdFace(bold || heading, italic);
+      total += measureSlice(seg, segLen);
+    }, st);
+    useBody();
+    return total;
+  }
+  useBody();
+  return u8g2.getUTF8Width(line);
+}
+
+void drawBionicLine(int x, int y, const char* line, MdStyleState* ioStyle) {
+  if (!line) return;
+  if (s_bionic) {
+    int cursorX = x;
+    forEachLineSegment(line, [&](const char* seg, int segLen, bool isWord) {
+      if (segLen <= 0) return;
+      if (!isWord) {
+        useBody();
+        printSlice(cursorX, y, seg, segLen);
+        cursorX += measureSlice(seg, segLen);
+        return;
+      }
+      int strong = bionicPrefixBytes(seg, segLen);
+      if (strong <= 0) {
+        useBody();
+        printSlice(cursorX, y, seg, segLen);
+        cursorX += measureSlice(seg, segLen);
+        return;
+      }
+      useBold();
+      printSlice(cursorX, y, seg, strong);
+      cursorX += measureSlice(seg, strong);
+      cursorX += kBionicRestGapPx;
+      useBody();
+      printSlice(cursorX, y, seg + strong, segLen - strong);
+      cursorX += measureSlice(seg + strong, segLen - strong);
+    });
+    useBody();
     return;
   }
-  int cursorX = x;
-  forEachLineSegment(line, [&](const char* seg, int segLen, bool isWord) {
-    if (segLen <= 0) return;
-    if (!isWord) {
-      useBody();
-      printSlice(cursorX, y, seg, segLen);
+  if (markdownStyleActive()) {
+    const char* text = line;
+    const bool heading = mdAtxHeading(line, &text) > 0;
+    MdStyleState local;
+    MdStyleState* st = ioStyle ? ioStyle : &local;
+    int cursorX = x;
+    forEachMdStyleRun(text, [&](const char* seg, int segLen, bool bold, bool italic) {
+      if (segLen <= 0) return;
+      useMdFace(bold || heading, italic);
+      // Oblique glyphs sit +xoff of the cursor. Pull the run left so first
+      // ink meets the previous roman; advance is unchanged, so that air
+      // lands on the right of the span. Measure/wrap untouched.
+      int drawX = cursorX;
+      if (italic) {
+        drawX -= firstGlyphXOff(seg, segLen);
+        if (drawX < x) drawX = x;
+      }
+      printSlice(drawX, y, seg, segLen);
       cursorX += measureSlice(seg, segLen);
-      return;
-    }
-    int strong = bionicPrefixBytes(seg, segLen);
-    if (strong <= 0) {
-      useBody();
-      printSlice(cursorX, y, seg, segLen);
-      cursorX += measureSlice(seg, segLen);
-      return;
-    }
-    useBold();
-    printSlice(cursorX, y, seg, strong);
-    cursorX += measureSlice(seg, strong);
-    cursorX += kBionicRestGapPx;
+    }, st);
     useBody();
-    printSlice(cursorX, y, seg + strong, segLen - strong);
-    cursorX += measureSlice(seg + strong, segLen - strong);
-  });
+    return;
+  }
   useBody();
+  u8g2.setCursor(x, y);
+  u8g2.print(line);
 }
 
 void invalidateLayoutCache() { s_layoutValid = false; }

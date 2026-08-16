@@ -2,6 +2,7 @@
 #define PALA_UI_FONT_H
 
 #include "src/pure/paginator.h"     // LayoutMetrics
+#include "src/pure/md_style.h"      // MdStyleState
 #include "src/storage/page_cache.h" // PageCacheLayout
 
 // ============================================================================
@@ -74,6 +75,12 @@ void setFamily(Family fam);
 void setBionic(bool on);
 void setHalfParagraphGaps(bool on);
 
+// Session flag: measure/draw markdown for the book currently being
+// paginated. Not persisted — set from the book path (`.md`) on open and
+// around cross-book page lookups. Defaults false.
+void setMarkdownEnabled(bool on);
+bool markdownEnabled();
+
 // Current applied values. Page-cache stamping passes everything through
 // `layoutForCache()`; these direct accessors exist for places that need
 // the individual values (web settings form, debug output).
@@ -95,21 +102,27 @@ PageCacheLayout layoutForCache();
 // paginator so wrapping accounts for the extra width.
 constexpr int kBionicRestGapPx = 1;
 
-// Measure / draw one line of body text, honoring bionic mode if enabled.
-// When bionic is off, both are equivalent to a straight u8g2 getUTF8Width
-// / print call under the Body font.
+// Measure / draw one line of body text.
 //
-// When bionic is on, the input is scanned for whitespace-delimited words;
-// each word that qualifies (see bionicPrefixBytes) renders its leading
-// "strong" chars with the Bold face followed by the rest with the Body
-// face, with kBionicRestGapPx between the two parts. The measurement
-// matches the draw width exactly so the paginator's wrap budget stays
-// correct.
+// Priority:
+//   1. Bionic on  — whitespace-delimited words; qualifying words render a
+//      Bold prefix + Body tail with kBionicRestGapPx between (see
+//      bionicPrefixBytes). Markdown is ignored.
+//   2. Helvetica + bionic off + markdown enabled for the active book
+//      (`.md` path; see `setMarkdownEnabled`) — minimal markdown:
+//      `**bold**`, `*italic*`, `***bold italic***`, and ATX headings
+//      (`#`..`######` + space). Markers stripped; headings force Bold;
+//      inline faces switch per run (italic = Adobe Helvetica oblique).
+//      Measure matches draw so wrap stays correct. When `ioStyle` is
+//      non-null, start from its bold/italic and write the ending state
+//      back so soft-wrapped continuation lines keep an open face
+//      (see text.cpp).
+//   3. Else — plain Body getUTF8Width / print.
 //
 // `line` is NUL-terminated. drawBionicLine sets u8g2's cursor to (x, y)
 // and leaves the active u8g2 font on Body afterwards.
-int  measureBionicLine(const char* line);
-void drawBionicLine(int x, int y, const char* line);
+int  measureBionicLine(const char* line, MdStyleState* ioStyle = nullptr);
+void drawBionicLine(int x, int y, const char* line, MdStyleState* ioStyle = nullptr);
 
 // Byte length of the leading "strong" (bold) prefix of `word` when rendered
 // in bionic mode. Returns 0 if the word doesn't qualify (punctuation-only,

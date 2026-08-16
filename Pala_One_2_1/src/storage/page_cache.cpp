@@ -23,12 +23,15 @@
 //                 reserve height and therefore a different maxLines
 //    0x50434F4A — added the half-height-paragraph-gaps flag; toggling it
 //                 changes how a blank line fills the page, shifting offsets
+//    0x50434F4B — markdown (.md): `**bold**` / `*italic*` / ATX headings;
+//                 style carries across soft wraps and page starts. .txt
+//                 stays plain (literal asterisks). Widths shift; rebuild.
 //
 //  Old files fail the magic check, get ignored, then overwritten on the next
 //  save. No migration code needed.
 // ============================================================================
 
-static constexpr uint32_t kPageCacheMagic = 0x50434F4AUL;
+static constexpr uint32_t kPageCacheMagic = 0x50434F51UL;
 
 static constexpr size_t kHeaderBytes =
     sizeof(uint32_t)   // magic
